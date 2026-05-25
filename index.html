@@ -10,38 +10,32 @@
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
 
-    /*
-      CLAVE PARA VER LA CÁMARA:
-      - html, body y a-scene deben tener background transparent
-      - El canvas de WebGL también debe ser transparent
-      - MindAR inyecta el <video> debajo del canvas
-    */
     html, body {
       width:100%;height:100%;overflow:hidden;
-      background: transparent !important;
+      background:#000;
       font-family:'Inter',sans-serif;
     }
 
-    /* Forzar transparencia en el canvas de A-Frame */
-    canvas.a-canvas {
-      background: transparent !important;
-    }
+    /* Canvas WebGL transparente — deja ver el video de la cámara debajo */
+    canvas { background:transparent !important; }
 
     a-scene {
       position:fixed !important; inset:0 !important;
       width:100% !important; height:100% !important;
       z-index:1;
-      background: transparent !important;
     }
 
-    /* El video de la cámara que inyecta MindAR */
+    /*
+      MindAR inyecta el <video> de la cámara trasera en el DOM.
+      Lo forzamos a cubrir toda la pantalla como fondo.
+    */
     video {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover !important;
-      z-index: 0 !important;
+      position:fixed !important;
+      inset:0 !important;
+      width:100% !important;
+      height:100% !important;
+      object-fit:cover !important;
+      z-index:0 !important;
     }
 
     /* ─── PANTALLAS UI encima de A-Frame ─── */
@@ -171,29 +165,7 @@
       text-shadow: 0 1px 3px #000;
     }
 
-    /* iOS gyro */
-    #gyrobtn{
-      position:fixed;bottom:76px;left:50%;transform:translateX(-50%);
-      z-index:55;background:#34d39930;border:1px solid #34d39988;
-      color:#34d399;font-family:'Orbitron',monospace;font-size:.62rem;
-      letter-spacing:1px;padding:11px 22px;border-radius:7px;
-      cursor:pointer;display:none;touch-action:manipulation;
-    }
-
-    /* Indicador de inclinación en pantalla */
-    #gyro-debug {
-      position: fixed;
-      bottom: 55px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 55;
-      font-size: 9px;
-      color: #34d39988;
-      font-family: 'Orbitron', monospace;
-      letter-spacing: 1px;
-      display: none;
-      pointer-events: none;
-    }
+    /* gyrobtn eliminado — control solo por toque */
   </style>
 </head>
 <body>
@@ -207,8 +179,8 @@
   mindar-image="imageTargetSrc:./targets.mind; filterMinCF:0.001; filterBeta:0.01; missTolerance:5; warmupTolerance:3"
   embedded
   vr-mode-ui="enabled:false"
-  renderer="antialias:true; alpha:true; colorManagement:true; clearColor:transparent"
-  background="transparent">
+  renderer="antialias:true; alpha:true"
+  background="color:#000000; transparent:true">
 
   <a-assets timeout="10000">
     <audio id="sndOk"  src="./acierto.mp3" preload="auto"></audio>
@@ -374,8 +346,7 @@
   <div id="prog-info"><span id="ptxt">0 / 10</span><span id="rtxt">RONDA 1</span></div>
   <div id="prog-bg"><div id="prog-fill"></div></div>
 </div>
-<div id="tilt">📱 INCLINA EL TELÉFONO PARA MOVER LA CANECA</div>
-<div id="gyro-debug"></div>
+<div id="tilt">👆 DESLIZA EL DEDO PARA MOVER LA CANECA</div>
 
 <!-- ════ FIN RONDA ════ -->
 <div id="s-fin" class="screen oculto">
@@ -398,7 +369,7 @@
 
 <div class="flash" id="fhit"></div>
 <div class="flash" id="fmiss"></div>
-<button id="gyrobtn">🔄 ACTIVAR GIROSCOPIO</button>
+
 
 <script>
 (function(){
@@ -437,23 +408,16 @@ function tap(id,fn){
 }
 
 // ── ESTADO ───────────────────────────────────────────────
-let desbloqueado=false, juegoActivo=false, gyroOn=false;
+let desbloqueado=false, juegoActivo=false;
 let score=0, combo=0, maxCombo=0, atrapados=0, ronda=1;
 let timerSeg=60, timerInt=null;
 let spawnTimer=null, spawnMs=2200;
 let rafLoop=null;
 const OBJETIVO=10, TIEMPO=60, LIMX=1.55;
-let gammaSuave=0;
 
 // ── MINDAR → MENÚ ────────────────────────────────────────
 sc.addEventListener('loaded',()=>{
   console.log('[GC] Escena cargada');
-  fixCanvasBackground();
-
-  // Observar si A-Frame agrega elementos con fondo y limpiarlos
-  setTimeout(fixCanvasBackground, 500);
-  setTimeout(fixCanvasBackground, 1500);
-  setTimeout(fixCanvasBackground, 3000);
 
   const tgt=$('artarget');
   if(!tgt){console.error('[GC] artarget no encontrado');return;}
@@ -489,63 +453,7 @@ document.querySelectorAll('.chip').forEach(c=>{
   c.addEventListener('click',fn);
 });
 
-// ── GIROSCOPIO ───────────────────────────────────────────
-// gamma = inclinación izq/derecha (lo que queremos)
-// beta  = inclinación adelante/atrás
-// El teléfono se usa en VERTICAL (portrait), por eso gamma es el eje lateral.
-// Rango de gamma: -90 a +90 grados
-// Lo mapeamos a posición X de -LIMX a +LIMX
-
-function initGyro(){
-  if(typeof DeviceOrientationEvent==='undefined') return;
-  if(typeof DeviceOrientationEvent.requestPermission==='function'){
-    // iOS 13+ requiere permiso explícito
-    $('gyrobtn').style.display='block';
-    $('gyrobtn').addEventListener('click',()=>{
-      DeviceOrientationEvent.requestPermission().then(r=>{
-        if(r==='granted'){
-          activarGyro();
-          $('gyrobtn').style.display='none';
-        } else {
-          $('gyrobtn').textContent='Permiso denegado - usa toque';
-          setTimeout(()=>$('gyrobtn').style.display='none', 2000);
-        }
-      }).catch(err=>{
-        console.error('[GC] Gyro permission error:', err);
-        $('gyrobtn').style.display='none';
-      });
-    },{once:true});
-  } else {
-    // Android y otros: acceso directo
-    activarGyro();
-  }
-}
-
-function activarGyro(){
-  let lastGamma = null;
-
-  window.addEventListener('deviceorientation', ev=>{
-    if(!juegoActivo) return;
-    if(ev.gamma == null) return;
-
-    // Suavizado exponencial para movimiento fluido
-    gammaSuave += (ev.gamma - gammaSuave) * 0.22;
-
-    // Mostrar debug mientras juega (ayuda a confirmar que funciona)
-    if($('gyro-debug').style.display !== 'none'){
-      $('gyro-debug').textContent = `γ ${ev.gamma.toFixed(1)}° → suave ${gammaSuave.toFixed(1)}°`;
-    }
-
-    // Mapear gamma (-60 a +60 grados) a posición X
-    // gamma=0 → centro, gamma=±60 → bordes
-    const sensitivity = 0.042; // aumentado para que sea más sensible
-    moverCaneca(gammaSuave * sensitivity);
-  },{passive:true});
-
-  gyroOn=true;
-  console.log('[GC] Giroscopio activado');
-}
-
+// ── CONTROL POR TOQUE (único método) ─────────────────────
 function moverCaneca(x){
   const c=$('caneca');
   if(!c||!juegoActivo) return;
@@ -553,18 +461,20 @@ function moverCaneca(x){
   c.object3D.position.x=nx;
 }
 
-// Touch / mouse (respaldo cuando no hay giroscopio)
-let tx0=0,txBase=0;
+let tx0=0, txBase=0;
 document.addEventListener('touchstart',e=>{
   if(!juegoActivo) return;
   tx0=e.touches[0].clientX;
   txBase=$('caneca').object3D.position.x;
 },{passive:true});
 document.addEventListener('touchmove',e=>{
-  if(!juegoActivo||gyroOn) return;
+  if(!juegoActivo) return;
+  e.preventDefault();
   moverCaneca(txBase+((e.touches[0].clientX-tx0)/window.innerWidth)*3.2);
 },{passive:false});
-let drag=false,mx0=0,mxBase=0;
+
+// Soporte ratón (para pruebas en PC)
+let drag=false, mx0=0, mxBase=0;
 document.addEventListener('mousedown',e=>{if(!juegoActivo)return;drag=true;mx0=e.clientX;mxBase=$('caneca').object3D.position.x;});
 document.addEventListener('mouseup',()=>drag=false);
 document.addEventListener('mousemove',e=>{
@@ -760,16 +670,23 @@ function iniciarTimer(){
 function iniciarConteo(){
   const cd=$('cd'), num=$('cdnum');
   cd.classList.add('vis');
-  let n=3;
-  const tick=()=>{
-    num.textContent=n>0?n:'¡YA!';
+  // Secuencia: 3 → 2 → 1 → ¡YA! → arranca
+  const pasos = ['3','2','1','¡YA!'];
+  let i = 0;
+  const tick = () => {
+    num.textContent = pasos[i];
     num.animate([
       {transform:'scale(1.6)',opacity:0},
       {transform:'scale(1)',opacity:1,offset:.25},
       {transform:'scale(.7)',opacity:0}
     ],{duration:900,easing:'ease-out'});
-    if(n<0){setTimeout(()=>{cd.classList.remove('vis');iniciarJuego();},380);return;}
-    n--; setTimeout(tick,950);
+    if(i === pasos.length - 1){
+      // último paso (¡YA!) — tras la animación arranca el juego
+      setTimeout(()=>{ cd.classList.remove('vis'); iniciarJuego(); }, 600);
+      return;
+    }
+    i++;
+    setTimeout(tick, 950);
   };
   tick();
 }
@@ -789,12 +706,6 @@ function iniciarJuego(){
   $('prog').style.display='block';
   $('tilt').style.display='block';
 
-  // Mostrar debug de giroscopio los primeros 8 segundos
-  const dbg=$('gyro-debug');
-  dbg.style.display='block';
-  setTimeout(()=>{dbg.style.display='none';},8000);
-
-  initGyro();
   juegoActivo=true;
   iniciarTimer();
 
@@ -822,8 +733,6 @@ function pararJuego(){
   $('htimer').style.display='none';
   $('prog').style.display='none';
   $('tilt').style.display='none';
-  $('gyrobtn').style.display='none';
-  $('gyro-debug').style.display='none';
 }
 
 function finRonda(exito){
