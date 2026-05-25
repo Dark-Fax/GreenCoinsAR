@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- A-Frame primero, luego MindAR, luego Physics -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
@@ -12,37 +13,46 @@
     *{margin:0;padding:0;box-sizing:border-box}
     body,html{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter',sans-serif}
 
-    /* ── CÁMARA FONDO (solo fase escaneo) ── */
-    #cam-bg{
-      position:fixed;inset:0;width:100%;height:100%;
-      object-fit:cover;z-index:0;display:none;
+    /* ─── A-FRAME ocupa toda la pantalla siempre (maneja la cámara real) ─── */
+    a-scene{
+      position:fixed;inset:0;width:100%!important;height:100%!important;
+      z-index:1;
     }
-    #cam-bg.activo{display:block}
-
-    /* ── A-FRAME (solo fase juego) ── */
-    #ar-scene-wrap{
-      position:fixed;inset:0;width:100%;height:100%;
-      z-index:1;display:none;
-    }
-    #ar-scene-wrap.activo{display:block}
-    a-scene{width:100%;height:100%}
     canvas{background:transparent!important}
 
-    /* ══ PANTALLAS ══ */
+    /* ─── Todas las pantallas UI encima de A-Frame ─── */
     .screen{
-      position:fixed;inset:0;z-index:100;
+      position:fixed;inset:0;
       display:flex;flex-direction:column;
-      transition:opacity .4s;
+      transition:opacity .35s ease;
+      /* z-index alto para estar siempre sobre el canvas */
     }
-    .screen.hidden{opacity:0;pointer-events:none!important}
-    .screen.hidden *{pointer-events:none!important}
-
-    /* ══ PANTALLA ESCANEO ══ */
+    /* pantalla de escaneo: z-index 10, semitransparente para ver la cámara */
     #screen-scan{
+      z-index:10;
       align-items:center;justify-content:flex-end;
       padding-bottom:60px;
-      background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.65) 100%);
+      background:linear-gradient(180deg,rgba(0,0,0,.08) 0%,rgba(0,0,0,.55) 100%);
+      pointer-events:none; /* deja pasar interacciones a MindAR */
     }
+    /* resto de pantallas: z-index 200, totalmente opacas */
+    #screen-menu,
+    #screen-tutorial,
+    #screen-fin{
+      z-index:200;
+      background:rgba(0,0,0,.88);
+      backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+    }
+    #countdown{z-index:300;}
+
+    .screen.hidden{
+      opacity:0;
+      pointer-events:none!important;
+    }
+    .screen.hidden *{pointer-events:none!important}
+
+    /* ══ SCAN ══ */
     .scan-frame{
       position:absolute;top:50%;left:50%;
       width:220px;height:220px;
@@ -53,21 +63,14 @@
     .scan-corner.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 6px 0 0}
     .scan-corner.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 6px}
     .scan-corner.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 6px 0}
-    .scan-line{
-      position:absolute;left:4px;right:4px;height:2px;
-      background:linear-gradient(90deg,transparent,#34d399,transparent);
-      animation:scan-anim 2s ease-in-out infinite;top:0;
-    }
+    .scan-line{position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(90deg,transparent,#34d399,transparent);animation:scan-anim 2s ease-in-out infinite;top:0}
     @keyframes scan-anim{0%{top:0;opacity:.8}50%{top:calc(100% - 2px)}100%{top:0;opacity:.8}}
     .scan-label{font-family:'Orbitron',monospace;font-size:.7rem;color:#34d399;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;opacity:.8}
     .app-title{font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:900;color:#fff;letter-spacing:2px;text-align:center;margin-bottom:6px;text-shadow:0 0 24px #34d39988}
-    .app-sub{font-size:.75rem;color:#ffffff66;letter-spacing:1px;text-align:center;margin-bottom:32px}
+    .app-sub{font-size:.75rem;color:#ffffffaa;letter-spacing:1px;text-align:center;margin-bottom:32px}
 
-    /* ══ MENÚ PRINCIPAL ══ */
-    #screen-menu{
-      align-items:center;justify-content:center;gap:16px;padding:24px;
-      background:rgba(0,0,0,.88);backdrop-filter:blur(12px);
-    }
+    /* ══ MENÚ ══ */
+    #screen-menu{align-items:center;justify-content:center;gap:16px;padding:24px}
     .menu-logo{font-family:'Orbitron',monospace;font-size:1.8rem;font-weight:900;color:#34d399;text-shadow:0 0 28px #34d39988;margin-bottom:8px;letter-spacing:3px}
     .menu-sub{font-size:.72rem;color:#ffffff55;letter-spacing:2px;margin-bottom:20px}
     .menu-card{
@@ -89,13 +92,16 @@
     .menu-text p{font-size:.7rem;color:#ffffff55;line-height:1.5}
     .menu-badge{margin-left:auto;background:#34d39922;border:1px solid #34d39966;border-radius:20px;padding:3px 10px;font-size:.6rem;color:#34d399;letter-spacing:1px;white-space:nowrap}
 
-    /* ══ PANTALLA TUTORIAL ══ */
-    #screen-tutorial{
-      background:rgba(0,10,5,.95);backdrop-filter:blur(14px);
-      overflow-y:auto;-webkit-overflow-scrolling:touch;
+    /* ══ TUTORIAL ══ */
+    #screen-tutorial{overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .tut-header{padding:20px 22px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #ffffff0f;flex-shrink:0;position:sticky;top:0;background:rgba(0,10,5,.95);z-index:1}
+    .tut-back{
+      font-size:1.4rem;cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;
+      padding:8px 12px;margin:-8px -4px;
+      user-select:none;
     }
-    .tut-header{padding:20px 22px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #ffffff0f;flex-shrink:0}
-    .tut-back{font-size:1.4rem;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:4px 8px}
     .tut-title{font-family:'Orbitron',monospace;font-size:1rem;color:#34d399}
     .tut-body{padding:20px 22px;display:flex;flex-direction:column;gap:20px}
     .canecas-grid{display:flex;gap:10px;justify-content:center}
@@ -117,19 +123,20 @@
     .tut-anim h4{font-size:.75rem;color:#fff;letter-spacing:1px;margin-bottom:14px;opacity:.7}
     .residuo-demo{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
     .residuo-chip{
-      background:rgba(255,255,255,.07);border-radius:20px;
-      padding:8px 14px;font-size:.72rem;color:#fff;
+      background:rgba(255,255,255,.08);border-radius:20px;
+      padding:9px 14px;font-size:.72rem;color:#fff;
       display:flex;align-items:center;gap:6px;
-      cursor:pointer;transition:background .2s;
+      cursor:pointer;
       -webkit-tap-highlight-color:transparent;
       touch-action:manipulation;user-select:none;
+      transition:background .15s;
     }
     .residuo-chip:active{background:rgba(52,211,153,.25)}
     .residuo-chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-    .tut-resultado{margin-top:12px;min-height:36px;font-size:.78rem;color:#34d399;font-weight:600;letter-spacing:1px;transition:opacity .3s;opacity:0}
+    .tut-resultado{margin-top:14px;min-height:36px;font-size:.82rem;color:#34d399;font-weight:600;letter-spacing:1px;opacity:0;transition:opacity .3s}
     .tut-resultado.show{opacity:1}
 
-    /* ══ HUD JUEGO ══ */
+    /* ══ HUD ══ */
     #hud{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:50}
     #hud.hidden{display:none}
     .score-bar{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 20px 0;background:linear-gradient(180deg,rgba(0,0,0,.6) 0%,transparent 100%)}
@@ -143,14 +150,11 @@
     #prog-info{display:flex;justify-content:space-between;font-size:9px;color:#ffffff55;letter-spacing:1px;margin-bottom:4px}
     #prog-bg{height:3px;background:#ffffff12;border-radius:2px}
     #prog-fill{height:3px;background:#34d399;border-radius:2px;transition:width .3s;box-shadow:0 0 8px #34d39988;width:0%}
-    #tilt-hint{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);font-size:10px;color:#ffffff30;letter-spacing:2px;font-family:'Orbitron',monospace;text-align:center;pointer-events:none;z-index:50;animation:blink 2.5s ease-in-out infinite;display:none}
-    @keyframes blink{0%,100%{opacity:.3}50%{opacity:.9}}
+    #tilt-hint{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);font-size:10px;color:#ffffff40;letter-spacing:2px;font-family:'Orbitron',monospace;text-align:center;pointer-events:none;z-index:50;display:none}
+    @keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
 
     /* ══ FIN RONDA ══ */
-    #screen-fin{
-      align-items:center;justify-content:center;padding:28px;
-      background:rgba(0,0,0,.88);backdrop-filter:blur(14px);
-    }
+    #screen-fin{align-items:center;justify-content:center;padding:28px}
     .fin-title{font-family:'Orbitron',monospace;font-size:1.5rem;font-weight:900;color:#34d399;text-align:center;margin-bottom:6px;text-shadow:0 0 20px #34d39988}
     .fin-sub{font-size:.72rem;color:#ffffff55;letter-spacing:1px;margin-bottom:24px}
     .stats-row{display:flex;gap:24px;margin-bottom:24px}
@@ -158,66 +162,103 @@
     .stat .n{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;color:#fbbf24}
     .stat .l{font-size:.6rem;color:#ffffff55;letter-spacing:2px;margin-top:2px}
     .fin-badge{background:#34d39918;border:1px solid #34d39944;border-radius:8px;padding:8px 20px;font-size:.72rem;color:#34d399;letter-spacing:1px;margin-bottom:24px;text-align:center}
-    .btn{padding:14px 36px;border:2px solid #34d399;border-radius:8px;background:transparent;color:#34d399;font-family:'Orbitron',monospace;font-size:.8rem;letter-spacing:2px;cursor:pointer;transition:all .2s;margin:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+    .btn{padding:14px 36px;border:2px solid #34d399;border-radius:8px;background:transparent;color:#34d399;font-family:'Orbitron',monospace;font-size:.8rem;letter-spacing:2px;cursor:pointer;transition:all .2s;margin:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
     .btn:active{background:#34d39922;transform:scale(.97)}
     .btn.secondary{border-color:#ffffff33;color:#ffffff66;font-size:.7rem}
 
     /* ══ COUNTDOWN ══ */
-    #countdown{position:fixed;inset:0;z-index:200;pointer-events:none;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)}
+    #countdown{
+      position:fixed;inset:0;z-index:300;pointer-events:none;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.45);
+    }
     #countdown.hidden{display:none}
     #cd-num{font-family:'Orbitron',monospace;font-size:110px;font-weight:900;color:#34d399;text-shadow:0 0 40px #34d39988}
 
-    /* Flash */
+    /* Flash feedback */
     .flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .08s;z-index:60}
-    #hit-flash{background:radial-gradient(circle,#34d39930 0%,transparent 70%)}
-    #miss-flash{background:radial-gradient(circle,#f8717130 0%,transparent 70%)}
-    .obj-tag{position:fixed;pointer-events:none;z-index:55;font-size:9px;color:#fff;background:#00000077;border:1px solid #ffffff22;border-radius:3px;padding:1px 5px;letter-spacing:1px;transform:translateX(-50%)}
+    #hit-flash{background:radial-gradient(circle,#34d39938 0%,transparent 70%)}
+    #miss-flash{background:radial-gradient(circle,#f8717138 0%,transparent 70%)}
 
-    /* Gyro btn */
-    #gyro-btn{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:150;background:#34d39922;border:1px solid #34d39944;color:#34d399;font-family:'Orbitron',monospace;font-size:.65rem;letter-spacing:1px;padding:8px 16px;border-radius:6px;cursor:pointer;display:none;touch-action:manipulation}
+    /* Etiqueta objeto 3D */
+    .obj-tag{position:fixed;pointer-events:none;z-index:55;font-size:9px;color:#fff;background:#00000099;border:1px solid #ffffff22;border-radius:3px;padding:2px 6px;letter-spacing:1px;transform:translateX(-50%);white-space:nowrap}
+
+    /* Gyro iOS */
+    #gyro-btn{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:250;background:#34d39922;border:1px solid #34d39966;color:#34d399;font-family:'Orbitron',monospace;font-size:.65rem;letter-spacing:1px;padding:10px 20px;border-radius:8px;cursor:pointer;display:none;touch-action:manipulation}
   </style>
 </head>
 <body>
 
-<!-- Video de fondo para fase escaneo -->
-<video id="cam-bg" autoplay playsinline muted></video>
+<!--
+  ════════════════════════════════════════════════════════════════
+  A-FRAME + MINDAR: La escena AR ocupa SIEMPRE toda la pantalla.
+  MindAR abre la cámara trasera y hace el tracking de la imagen.
+  La cámara real se ve de fondo automáticamente.
+  ════════════════════════════════════════════════════════════════
+-->
+<a-scene
+  id="escena"
+  mindar-image="imageTargetSrc:./targets.mind; filterMinCF:0.001; filterBeta:0.01; missTolerance:5; warmupTolerance:3; uiScanning:#mindar-scan-ui"
+  physics="driver:local; gravity:-9.8; iterations:20; debug:false"
+  embedded
+  vr-mode-ui="enabled:false"
+  renderer="antialias:true; alpha:true; colorManagement:true; physicallyCorrectLights:true"
+  background="color:transparent">
 
-<!-- A-Frame (oculto hasta que se inicia el juego) -->
-<div id="ar-scene-wrap">
-  <a-scene
-    physics="driver:local; gravity:-11; iterations:18; debug:false"
-    embedded vr-mode-ui="enabled:false"
-    renderer="antialias:true; alpha:true; colorManagement:true"
-    background="color:#0d1f12">
+  <a-assets>
+    <audio id="sndAcierto" src="./acierto.mp3" preload="auto" crossorigin="anonymous"></audio>
+    <audio id="sndNya"     src="./nya.mp3"     preload="auto" crossorigin="anonymous"></audio>
+  </a-assets>
 
-    <a-assets>
-      <audio id="soundAcierto" src="./acierto.mp3" preload="auto"></audio>
-      <audio id="soundNya"     src="./nya.mp3"     preload="auto"></audio>
-    </a-assets>
+  <a-entity light="type:ambient;intensity:0.9"></a-entity>
+  <a-entity light="type:directional;intensity:0.8;castShadow:true" position="1 4 2"></a-entity>
 
-    <a-entity light="type:ambient;intensity:0.8"></a-entity>
-    <a-entity light="type:directional;intensity:0.7;castShadow:true" position="2 5 3"></a-entity>
+  <!--
+    Target MindAR: cuando se detecta la imagen se dispara targetFound.
+    Solo lo usamos como disparador; no ponemos contenido visual aquí.
+  -->
+  <a-entity id="ar-target" mindar-image-target="targetIndex:0"></a-entity>
 
-    <!-- CANECA 3D -->
-    <a-entity id="caneca-grupo" position="0 -1.9 -3.2" visible="false">
-      <a-cone radius-bottom="0.32" radius-top="0.27" height="0.72"
-        color="#059669" roughness="0.35" metalness="0.35" shadow="cast:true"></a-cone>
-      <a-cylinder position="0 0 0" radius="0.285" height="0.07" color="#34d399" roughness="0.25" metalness="0.55"></a-cylinder>
-      <a-torus position="0 0.36 0" rotation="90 0 0" radius="0.30" radius-tubular="0.019" color="#6ee7b7" metalness="0.65" roughness="0.15"></a-torus>
-      <a-cylinder position="0 0.41 0" radius="0.28" height="0.055" color="#065f46" roughness="0.45" metalness="0.25" shadow="cast:true"></a-cylinder>
-      <a-box position="0 0.44 0.10" width="0.24" height="0.03" depth="0.10" color="#022c22"></a-box>
-      <a-cylinder position="0 -0.38 0" radius="0.34" height="0.065" color="#047857" roughness="0.55" metalness="0.15"></a-cylinder>
-      <a-torus position="0 0.06 0.33" rotation="0 0 0" radius="0.068" radius-tubular="0.011" color="#a7f3d0"></a-torus>
-      <a-box id="caneca-hit" position="0 -0.05 0" width="0.63" height="0.52" depth="0.63" visible="false" static-body="mass:0"></a-box>
-    </a-entity>
+  <!-- ═══ CANECA 3D ═══ -->
+  <a-entity id="caneca-grupo" position="0 -1.9 -3.5" visible="false">
+    <!-- Cuerpo -->
+    <a-cone radius-bottom="0.32" radius-top="0.27" height="0.72"
+      color="#059669" roughness="0.35" metalness="0.35" shadow="cast:true"></a-cone>
+    <!-- Borde superior interno -->
+    <a-cylinder radius="0.285" height="0.07" color="#34d399" roughness="0.25" metalness="0.55"></a-cylinder>
+    <!-- Aro exterior -->
+    <a-torus position="0 0.36 0" rotation="90 0 0" radius="0.30" radius-tubular="0.019" color="#6ee7b7" metalness="0.65" roughness="0.15"></a-torus>
+    <!-- Tapa -->
+    <a-cylinder position="0 0.41 0" radius="0.28" height="0.055" color="#065f46" roughness="0.45" metalness="0.25" shadow="cast:true"></a-cylinder>
+    <!-- Manija tapa -->
+    <a-box position="0 0.44 0.10" width="0.24" height="0.03" depth="0.10" color="#022c22"></a-box>
+    <!-- Base -->
+    <a-cylinder position="0 -0.38 0" radius="0.34" height="0.065" color="#047857" roughness="0.55" metalness="0.15"></a-cylinder>
+    <!-- Detalles -->
+    <a-torus position="0 0.06 0.33" rotation="0 0 0" radius="0.068" radius-tubular="0.011" color="#a7f3d0"></a-torus>
+    <!-- Collider invisible -->
+    <a-box id="caneca-hit" position="0 0 0"
+      width="0.65" height="0.55" depth="0.65"
+      visible="false" static-body="mass:0"></a-box>
+  </a-entity>
 
-    <a-box id="suelo-limite" position="0 -3.5 -3.2" width="16" height="0.1" depth="5" visible="false" static-body="mass:0"></a-box>
+  <!-- Suelo: elimina objetos que caigan demasiado -->
+  <a-box id="suelo-limite" position="0 -4.0 -3.5"
+    width="20" height="0.1" depth="8"
+    visible="false" static-body="mass:0"></a-box>
 
-    <a-camera position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-camera>
-  </a-scene>
-</div>
+  <a-camera position="0 0 0"
+    look-controls="enabled:false"
+    wasd-controls="enabled:false">
+  </a-camera>
+</a-scene>
 
-<!-- ══ PANTALLA ESCANEO ══ -->
+<!-- UI nativa de MindAR (necesaria para que el sistema funcione, la ocultamos con CSS) -->
+<div id="mindar-scan-ui" style="display:none"></div>
+
+<!-- ════════════════════════════════════════ -->
+<!-- PANTALLA ESCANEO (semitransparente, se ve la cámara real detrás) -->
+<!-- ════════════════════════════════════════ -->
 <div id="screen-scan" class="screen">
   <div class="scan-frame">
     <div class="scan-corner tl"></div>
@@ -231,7 +272,9 @@
   <div class="app-sub">Universidad Manuela Beltrán · Reciclaje Gamificado</div>
 </div>
 
-<!-- ══ MENÚ PRINCIPAL ══ -->
+<!-- ════════════════════════════════════════ -->
+<!-- MENÚ PRINCIPAL -->
+<!-- ════════════════════════════════════════ -->
 <div id="screen-menu" class="screen hidden">
   <div class="menu-logo">♻ GREENCOINS</div>
   <div class="menu-sub">SELECCIONA UNA OPCIÓN</div>
@@ -255,13 +298,16 @@
   </div>
 </div>
 
-<!-- ══ PANTALLA TUTORIAL ══ -->
+<!-- ════════════════════════════════════════ -->
+<!-- TUTORIAL -->
+<!-- ════════════════════════════════════════ -->
 <div id="screen-tutorial" class="screen hidden">
   <div class="tut-header">
     <div class="tut-back" id="btn-tut-back">←</div>
     <div class="tut-title">GUÍA DE RECICLAJE</div>
   </div>
   <div class="tut-body">
+
     <div>
       <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">¿Qué va en cada caneca?</div>
       <div class="canecas-grid">
@@ -270,28 +316,32 @@
         <div class="caneca-card negra"><div class="caneca-icon">🗑</div><div class="caneca-color">Negra</div><div class="caneca-items">Restos<br>comida<br>Servilletas<br>No recic.</div></div>
       </div>
     </div>
+
     <div class="tut-anim">
       <h4>TOCA UN RESIDUO PARA VER DÓNDE VA</h4>
       <div class="residuo-demo">
         <div class="residuo-chip" data-caneca="Blanca 🗑" data-color="#e5e7eb"><div class="dot" style="background:#3b82f6"></div>Botella plástico</div>
-        <div class="residuo-chip" data-caneca="Verde 🗑" data-color="#34d399"><div class="dot" style="background:#a3e635"></div>Hoja de papel</div>
-        <div class="residuo-chip" data-caneca="Negra 🗑" data-color="#9ca3af"><div class="dot" style="background:#6b7280"></div>Resto de comida</div>
+        <div class="residuo-chip" data-caneca="Verde 🗑"  data-color="#34d399"><div class="dot" style="background:#a3e635"></div>Hoja de papel</div>
+        <div class="residuo-chip" data-caneca="Negra 🗑"  data-color="#9ca3af"><div class="dot" style="background:#6b7280"></div>Resto de comida</div>
         <div class="residuo-chip" data-caneca="Blanca 🗑" data-color="#e5e7eb"><div class="dot" style="background:#94a3b8"></div>Lata de aluminio</div>
-        <div class="residuo-chip" data-caneca="Verde 🗑" data-color="#34d399"><div class="dot" style="background:#f59e0b"></div>Cartón de jugo</div>
-        <div class="residuo-chip" data-caneca="Negra 🗑" data-color="#9ca3af"><div class="dot" style="background:#ef4444"></div>Servilleta usada</div>
+        <div class="residuo-chip" data-caneca="Verde 🗑"  data-color="#34d399"><div class="dot" style="background:#f59e0b"></div>Cartón de jugo</div>
+        <div class="residuo-chip" data-caneca="Negra 🗑"  data-color="#9ca3af"><div class="dot" style="background:#ef4444"></div>Servilleta usada</div>
       </div>
       <div class="tut-resultado" id="tut-resultado">—</div>
     </div>
-    <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Eco-Datos 🌱</div>
+
+    <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Eco-Datos 🌱</div>
     <div class="eco-card"><div class="eco-icon">💡</div><div class="eco-text"><h4>Botella de plástico</h4><p>Reciclar una botella PET ahorra energía equivalente a encender un bombillo durante 4 horas.</p></div></div>
     <div class="eco-card"><div class="eco-icon">🌊</div><div class="eco-text"><h4>Lata de aluminio</h4><p>El aluminio tarda 500 años en degradarse. Reciclado, ahorra un 95% de la energía de producción.</p></div></div>
     <div class="eco-card"><div class="eco-icon">🌳</div><div class="eco-text"><h4>Papel y cartón</h4><p>Reciclar 1 tonelada de papel salva 17 árboles y ahorra 26,000 litros de agua.</p></div></div>
     <div class="eco-card"><div class="eco-icon">🏭</div><div class="eco-text"><h4>Colombia recicla solo el 8%</h4><p>El promedio latinoamericano es 18%. Cada residuo bien clasificado en UMB cuenta.</p></div></div>
-    <div style="height:20px"></div>
+    <div style="height:24px"></div>
   </div>
 </div>
 
-<!-- ══ HUD JUEGO ══ -->
+<!-- ════════════════════════════════════════ -->
+<!-- HUD JUEGO -->
+<!-- ════════════════════════════════════════ -->
 <div id="hud" class="hidden">
   <div class="score-bar">
     <div><div class="hud-lbl">GreenCoins</div><div class="hud-score" id="score-val">0</div></div>
@@ -308,10 +358,12 @@
 </div>
 <div id="tilt-hint">INCLINA EL TELÉFONO PARA MOVER LA CANECA</div>
 
-<!-- ══ FIN RONDA ══ -->
+<!-- ════════════════════════════════════════ -->
+<!-- FIN RONDA -->
+<!-- ════════════════════════════════════════ -->
 <div id="screen-fin" class="screen hidden">
   <div class="fin-title" id="fin-titulo">RONDA COMPLETADA</div>
-  <div class="fin-sub" id="fin-sub">¡Objetivo cumplido!</div>
+  <div class="fin-sub"   id="fin-sub">¡Objetivo cumplido!</div>
   <div class="stats-row">
     <div class="stat"><div class="n" id="fin-score">0</div><div class="l">PUNTOS</div></div>
     <div class="stat"><div class="n" id="fin-combo">0</div><div class="l">COMBO MÁX</div></div>
@@ -324,212 +376,168 @@
   </div>
 </div>
 
-<!-- ══ COUNTDOWN ══ -->
+<!-- ════════════════════════════════════════ -->
+<!-- COUNTDOWN -->
+<!-- ════════════════════════════════════════ -->
 <div id="countdown" class="hidden">
   <div id="cd-num"></div>
 </div>
 
+<!-- Feedback visual -->
 <div class="flash" id="hit-flash"></div>
 <div class="flash" id="miss-flash"></div>
+
+<!-- Permiso giroscopio iOS -->
 <button id="gyro-btn">ACTIVAR GIROSCOPIO</button>
 
-<!-- MindAR se carga solo en fase escaneo, fuera de A-Frame -->
-<div id="mindar-container" style="position:fixed;inset:0;z-index:5;display:none"></div>
-
+<!-- ════════════════════════════════════════════════════════════════ -->
 <script>
-(function(){
+(function () {
 'use strict';
 
-// ══════════════════════════════════════════
-// FASE 1: ESCANEO CON CÁMARA
-// ══════════════════════════════════════════
+// ─────────────────────────────────────────
+// UTILIDADES
+// ─────────────────────────────────────────
+const $ = id => document.getElementById(id);
 
-let camStream = null;
-let desbloqueado = false;
-
-// Activar cámara para el video de fondo en escaneo
-async function iniciarCamaraEscaneo() {
-  try {
-    camStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
-    const vid = document.getElementById('cam-bg');
-    vid.srcObject = camStream;
-    vid.classList.add('activo');
-  } catch(e) {
-    console.warn('Sin cámara:', e);
-    document.body.style.background = '#0d1f12';
-  }
+function showScreen(id) {
+  // Oculta todas las pantallas, muestra solo la pedida
+  ['screen-scan','screen-menu','screen-tutorial','screen-fin'].forEach(s => {
+    $(s).classList.add('hidden');
+  });
+  if (id) $(id).classList.remove('hidden');
 }
 
-// Simulación de escaneo: toca la pantalla para desbloquear
-// (En producción reemplazar por targetFound de MindAR)
-function iniciarDeteccionEscaneo() {
-  // Opción A: MindAR real - descomentar cuando tengas targets.mind
-  /*
-  iniciarMindAR();
-  */
-
-  // Opción B: Toca la pantalla para simular escaneo (desarrollo/demo)
-  const scanEl = document.getElementById('screen-scan');
-  scanEl.style.cursor = 'pointer';
-  
-  // Añadir instrucción táctil de demo
-  const demoLabel = document.createElement('div');
-  demoLabel.style.cssText = 'position:absolute;bottom:140px;left:50%;transform:translateX(-50%);font-size:.65rem;color:#34d39988;letter-spacing:2px;font-family:Orbitron,monospace;text-align:center;animation:blink 1.5s ease-in-out infinite';
-  demoLabel.textContent = 'TOCA LA PANTALLA PARA CONTINUAR';
-  scanEl.appendChild(demoLabel);
-
-  scanEl.addEventListener('click', () => {
-    if (desbloqueado) return;
-    desbloqueado = true;
-    irMenu();
-  }, { once: true });
-
-  scanEl.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    if (desbloqueado) return;
-    desbloqueado = true;
-    irMenu();
-  }, { once: true });
+function showHUD(mostrar) {
+  $('hud')      [mostrar ? 'classList' : 'classList'][mostrar ? 'remove' : 'add']('hidden');
+  $('prog-wrap')[mostrar ? 'classList' : 'classList'][mostrar ? 'remove' : 'add']('hidden');
+  $('tilt-hint').style.display = mostrar ? 'block' : 'none';
 }
 
-// MindAR real (cuando tengas el archivo targets.mind)
-function iniciarMindAR() {
-  // Crear una mini-escena MindAR solo para detectar el target
-  const mindarDiv = document.getElementById('mindar-container');
-  mindarDiv.style.display = 'block';
-  mindarDiv.innerHTML = `
-    <a-scene
-      mindar-image="imageTargetSrc:./targets.mind; filterMinCF:0.001; filterBeta:0.01; uiScanning:#scan-placeholder"
-      embedded vr-mode-ui="enabled:false"
-      renderer="antialias:false; alpha:true"
-      background="color:transparent"
-      style="width:100%;height:100%">
-      <a-entity id="ar-target-detect" mindar-image-target="targetIndex:0"></a-entity>
-      <a-camera position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-camera>
-    </a-scene>
-    <div id="scan-placeholder" style="display:none"></div>
-  `;
-
-  setTimeout(() => {
-    const miniScene = mindarDiv.querySelector('a-scene');
-    if (!miniScene) return;
-    miniScene.addEventListener('loaded', () => {
-      const target = mindarDiv.querySelector('#ar-target-detect');
-      if (!target) return;
-      target.addEventListener('targetFound', () => {
-        if (desbloqueado) return;
-        desbloqueado = true;
-        try { miniScene.systems['mindar-image-system'].stop(); } catch(e) {}
-        mindarDiv.style.display = 'none';
-        irMenu();
-      });
-    });
-  }, 500);
-}
-
-// ══════════════════════════════════════════
-// NAVEGACIÓN (z-index 100, siempre encima)
-// ══════════════════════════════════════════
-
-function show(id) { document.getElementById(id).classList.remove('hidden'); }
-function hide(id) { document.getElementById(id).classList.add('hidden'); }
-
-function irMenu() {
-  // Detener cámara de escaneo
-  if (camStream) {
-    camStream.getTracks().forEach(t => t.stop());
-    camStream = null;
-  }
-  document.getElementById('cam-bg').classList.remove('activo');
-
-  hide('screen-scan');
-  show('screen-menu');
-}
-
-// Botones del menú - con listeners robustos para touch
-function addTap(id, fn) {
-  const el = document.getElementById(id);
+// Registra TANTO click como touchend (evita el retraso de 300ms)
+function onTap(id, fn) {
+  const el = $(id);
   if (!el) return;
-  // Tanto click como touchend para máxima compatibilidad móvil
-  el.addEventListener('click', fn);
-  el.addEventListener('touchend', function(e) {
-    e.preventDefault(); // evita el ghost click de 300ms
-    fn(e);
+  let lastTouch = 0;
+  el.addEventListener('touchend', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    lastTouch = Date.now();
+    fn();
+  });
+  el.addEventListener('click', e => {
+    if (Date.now() - lastTouch < 500) return; // evita doble disparo
+    fn();
   });
 }
 
-addTap('btn-tutorial', () => {
-  hide('screen-menu');
-  show('screen-tutorial');
+// ─────────────────────────────────────────
+// ESTADO GLOBAL
+// ─────────────────────────────────────────
+let juegoActivo  = false;
+let gyroActivo   = false;
+let gammaSuave   = 0;
+
+let score, combo, maxCombo, atrapados, ronda;
+let spawnDelay, lastSpawnTime, rafId, timerInterval, timerSeg;
+const OBJETIVO = 10;
+const TIEMPO   = 60;
+const LIM_X    = 1.6;
+
+// ─────────────────────────────────────────
+// MINDAR: detección de imagen → menú
+// ─────────────────────────────────────────
+let desbloqueado = false;
+
+const escena = $('escena');
+
+escena.addEventListener('loaded', () => {
+  console.log('[GC] A-Frame loaded, esperando MindAR...');
+
+  const target = $('ar-target');
+  if (!target) { console.error('[GC] No se encontró ar-target'); return; }
+
+  target.addEventListener('targetFound', () => {
+    console.log('[GC] ¡Target encontrado!');
+    if (desbloqueado) return;
+    desbloqueado = true;
+    // Breve vibración de confirmación si el dispositivo lo soporta
+    if (navigator.vibrate) navigator.vibrate(80);
+    showScreen('screen-menu');
+  });
+
+  target.addEventListener('targetLost', () => {
+    // Si el juego está activo no importa perder el target
+    console.log('[GC] Target perdido');
+  });
 });
 
-addTap('btn-tut-back', () => {
-  hide('screen-tutorial');
-  show('screen-menu');
+// ─────────────────────────────────────────
+// NAVEGACIÓN
+// ─────────────────────────────────────────
+onTap('btn-tutorial', () => {
+  showScreen('screen-tutorial');
+  $('screen-tutorial').scrollTop = 0;
 });
 
-addTap('btn-jugar', () => {
-  hide('screen-menu');
+// CRÍTICO: usa showScreen, NO history.back()
+onTap('btn-tut-back', () => {
+  showScreen('screen-menu');
+});
+
+onTap('btn-jugar', () => {
+  showScreen(null); // oculta todas las pantallas UI
   iniciarConteo();
 });
 
-addTap('btn-retry', () => {
-  hide('screen-fin');
+onTap('btn-retry', () => {
+  showScreen(null);
   iniciarConteo();
 });
 
-addTap('btn-menu-fin', () => {
-  hide('screen-fin');
-  show('screen-menu');
+onTap('btn-menu-fin', () => {
+  limpiarJuego();
+  showScreen('screen-menu');
 });
 
-// ══════════════════════════════════════════
-// TUTORIAL: chips interactivos
-// ══════════════════════════════════════════
+// Tutorial chips
 document.querySelectorAll('.residuo-chip').forEach(chip => {
-  const handler = (e) => {
+  const handler = e => {
     e.preventDefault();
-    const res = document.getElementById('tut-resultado');
+    const res = $('tut-resultado');
     res.textContent = `→ Va en la caneca ${chip.dataset.caneca}`;
-    res.style.color = chip.dataset.color;
+    res.style.color  = chip.dataset.color;
     res.classList.add('show');
-    setTimeout(() => res.classList.remove('show'), 2500);
+    setTimeout(() => res.classList.remove('show'), 2800);
   };
+  chip.addEventListener('touchend', handler, { passive: false });
   chip.addEventListener('click', handler);
-  chip.addEventListener('touchend', handler);
 });
 
-// ══════════════════════════════════════════
-// GIROSCOPIO Y CONTROLES
-// ══════════════════════════════════════════
-let gyroActivo = false, gammaSuave = 0;
-const GYRO_SENSIBILIDAD = 0.04;
-const GYRO_LIMITE = 1.5;
-let juegoActivo = false;
-
+// ─────────────────────────────────────────
+// GIROSCOPIO + CONTROLES
+// ─────────────────────────────────────────
 function moverCaneca(x) {
-  const canecaGrupo = document.getElementById('caneca-grupo');
-  const canecaHit = document.getElementById('caneca-hit');
-  const nx = Math.max(-GYRO_LIMITE, Math.min(GYRO_LIMITE, x));
-  canecaGrupo.object3D.position.x = nx;
-  if (canecaHit.body) {
-    canecaHit.body.position.x = nx;
-    canecaHit.body.velocity.setZero();
+  const cg  = $('caneca-grupo');
+  const hit = $('caneca-hit');
+  if (!cg) return;
+  const nx = Math.max(-LIM_X, Math.min(LIM_X, x));
+  cg.object3D.position.x = nx;
+  if (hit && hit.body) {
+    hit.body.position.x = nx;
+    hit.body.velocity.setZero();
   }
 }
 
 function iniciarGiroscopio() {
   if (typeof DeviceOrientationEvent === 'undefined') return;
   if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    document.getElementById('gyro-btn').style.display = 'block';
-    document.getElementById('gyro-btn').addEventListener('click', () => {
+    $('gyro-btn').style.display = 'block';
+    $('gyro-btn').addEventListener('click', () => {
       DeviceOrientationEvent.requestPermission().then(r => {
         if (r === 'granted') activarGyro();
-        document.getElementById('gyro-btn').style.display = 'none';
-      });
+        $('gyro-btn').style.display = 'none';
+      }).catch(() => { $('gyro-btn').style.display = 'none'; });
     }, { once: true });
   } else {
     activarGyro();
@@ -539,162 +547,240 @@ function iniciarGiroscopio() {
 function activarGyro() {
   window.addEventListener('deviceorientation', ev => {
     if (!juegoActivo || ev.gamma == null) return;
-    gammaSuave += (ev.gamma - gammaSuave) * 0.15;
-    moverCaneca(gammaSuave * GYRO_SENSIBILIDAD);
-  }, false);
+    gammaSuave += (ev.gamma - gammaSuave) * 0.18;
+    moverCaneca(gammaSuave * 0.038);
+  }, { passive: true });
   gyroActivo = true;
+  console.log('[GC] Giroscopio activo');
 }
 
-// Fallback táctil
-let startX = 0, baseX = 0;
+// Touch fallback
+let touchStartX = 0, touchBaseX = 0;
 document.addEventListener('touchstart', e => {
   if (!juegoActivo) return;
-  startX = e.touches[0].clientX;
-  const canecaGrupo = document.getElementById('caneca-grupo');
-  baseX = canecaGrupo.object3D.position.x;
+  touchStartX = e.touches[0].clientX;
+  touchBaseX  = $('caneca-grupo').object3D.position.x;
 }, { passive: true });
 document.addEventListener('touchmove', e => {
   if (!juegoActivo || gyroActivo) return;
-  const dx = ((e.touches[0].clientX - startX) / window.innerWidth) * 3.2;
-  moverCaneca(baseX + dx);
+  const dx = ((e.touches[0].clientX - touchStartX) / window.innerWidth) * 3.4;
+  moverCaneca(touchBaseX + dx);
 }, { passive: false });
 
 // Mouse desktop
-let dragging = false;
+let dragging = false, mouseStartX = 0, mouseBaseX = 0;
 document.addEventListener('mousedown', e => {
   if (!juegoActivo) return;
-  dragging = true;
-  startX = e.clientX;
-  const canecaGrupo = document.getElementById('caneca-grupo');
-  baseX = canecaGrupo.object3D.position.x;
+  dragging     = true;
+  mouseStartX  = e.clientX;
+  mouseBaseX   = $('caneca-grupo').object3D.position.x;
 });
 document.addEventListener('mouseup', () => dragging = false);
 document.addEventListener('mousemove', e => {
   if (!dragging || !juegoActivo) return;
-  const dx = ((e.clientX - startX) / window.innerWidth) * 3.2;
-  moverCaneca(baseX + dx);
+  const dx = ((e.clientX - mouseStartX) / window.innerWidth) * 3.4;
+  moverCaneca(mouseBaseX + dx);
 });
 
-// ══════════════════════════════════════════
-// JUEGO
-// ══════════════════════════════════════════
-let score = 0, combo = 0, maxCombo = 0, atrapados = 0, ronda = 1;
-let spawnDelay = 2200, lastSpawn = 0, rafId = null, timerInt = null, timerSeg = 60;
-const OBJETIVO = 10, TIEMPO = 60;
-
+// ─────────────────────────────────────────
+// TIPOS DE RESIDUO
+// ─────────────────────────────────────────
 const TIPOS = [
-  { label:'📦 CARTÓN',    color:'#3b82f6', emit:'#1d4ed8', geo:'primitive:box;width:0.24;height:0.32;depth:0.24', mass:0.4 },
-  { label:'🧴 PLÁSTICO',  color:'#e5e7eb', emit:'#9ca3af', geo:'primitive:cylinder;radius:0.11;height:0.30',       mass:0.25 },
-  { label:'🍎 ORGÁNICO',  color:'#a3e635', emit:'#65a30d', geo:'primitive:sphere;radius:0.14',                     mass:0.35 },
-  { label:'🍷 VIDRIO',    color:'#f87171', emit:'#b91c1c', geo:'primitive:cylinder;radius:0.09;height:0.38',       mass:0.6 },
-  { label:'🔩 METAL',     color:'#94a3b8', emit:'#334155', geo:'primitive:box;width:0.20;height:0.20;depth:0.20',  mass:0.8 },
+  { label:'📦 CARTÓN',   color:'#60a5fa', emit:'#1d4ed8', shape:'box',      sw:0.24, sh:0.32, sd:0.24, mass:0.40 },
+  { label:'🧴 PLÁSTICO', color:'#e5e7eb', emit:'#9ca3af', shape:'cylinder', sr:0.11, sh:0.30,           mass:0.25 },
+  { label:'🍎 ORGÁNICO', color:'#86efac', emit:'#16a34a', shape:'sphere',   sr:0.14,                    mass:0.35 },
+  { label:'🍷 VIDRIO',   color:'#fca5a5', emit:'#b91c1c', shape:'cylinder', sr:0.09, sh:0.38,           mass:0.60 },
+  { label:'🔩 METAL',    color:'#cbd5e1', emit:'#334155', shape:'box',      sw:0.20, sh:0.20, sd:0.20,  mass:0.80 },
 ];
 
-function spawnResiduo() {
-  const scene = document.querySelector('a-scene');
-  if (!scene || !scene.hasLoaded) return;
-  const tipo = TIPOS[Math.floor(Math.random() * TIPOS.length)];
-  const el = document.createElement('a-entity');
-  const sx = (Math.random() * 2.8) - 1.4;
-
-  el.setAttribute('geometry', tipo.geo);
-  el.setAttribute('material', `color:${tipo.color};emissive:${tipo.emit};emissiveIntensity:0.18;roughness:0.5;metalness:0.3`);
-  el.setAttribute('position', `${sx} 3.8 -3.2`);
-  el.setAttribute('rotation', `${Math.random()*360} ${Math.random()*360} 0`);
-  el.setAttribute('shadow', 'cast:true');
-  el.setAttribute('dynamic-body', `mass:${tipo.mass};linearDamping:0.04;angularDamping:0.08`);
-  scene.appendChild(el);
-
-  el.addEventListener('body-loaded', () => {
-    if (el.body) el.body.angularVelocity.set(
-      (Math.random()-.5)*5, (Math.random()-.5)*5, (Math.random()-.5)*3);
-  });
-
-  const tag = document.createElement('div');
-  tag.className = 'obj-tag';
-  tag.textContent = tipo.label;
-  document.body.appendChild(tag);
-  const tagTick = setInterval(() => {
-    if (!el.parentNode) { clearInterval(tagTick); tag.remove(); return; }
-    const p = el.object3D.getWorldPosition(new THREE.Vector3());
-    tag.style.left = ((p.x / 3.5 + 0.5) * window.innerWidth) + 'px';
-    tag.style.top = ((-p.y / 7 + 0.5) * window.innerHeight - 22) + 'px';
-  }, 50);
-
-  let handled = false;
-  el.addEventListener('collide', ev => {
-    if (handled) return;
-    const other = ev.detail.body?.el;
-    const canecaHit = document.getElementById('caneca-hit');
-    const scoreEl = document.getElementById('score-val');
-    const comboEl = document.getElementById('combo-val');
-    if (other && other.id === 'caneca-hit') {
-      handled = true;
-      playAudio('#soundAcierto'); flash('hit'); bounceCaneca();
-      combo++; if (combo > maxCombo) maxCombo = combo;
-      atrapados++; score += 10 * combo;
-      scoreEl.textContent = score; comboEl.textContent = `×${combo}`;
-      actualizarProg(); popParticles(tipo.color);
-      destroy(el, tag, tagTick);
-      if (atrapados >= OBJETIVO) finRonda(true);
-    } else if (other && other.id === 'suelo-limite') {
-      handled = true;
-      playAudio('#soundNya'); flash('miss');
-      combo = 0; comboEl.textContent = '×1';
-      destroy(el, tag, tagTick);
-    }
-  });
-  setTimeout(() => { if (!handled && el.parentNode) { handled = true; destroy(el, tag, tagTick); } }, 9000);
+function geoAttr(t) {
+  if (t.shape === 'box')      return `primitive:box;width:${t.sw};height:${t.sh};depth:${t.sd}`;
+  if (t.shape === 'cylinder') return `primitive:cylinder;radius:${t.sr};height:${t.sh}`;
+  if (t.shape === 'sphere')   return `primitive:sphere;radius:${t.sr}`;
+  return 'primitive:box';
 }
 
-function destroy(el, tag, tagTick) {
-  clearInterval(tagTick); tag.remove();
+// ─────────────────────────────────────────
+// SPAWN DE RESIDUOS
+// ─────────────────────────────────────────
+const residuosActivos = new Set();
+
+function spawnResiduo() {
+  if (!juegoActivo) return;
+
+  const tipo = TIPOS[Math.floor(Math.random() * TIPOS.length)];
+  const sx   = (Math.random() * 2.6) - 1.3;
+  const el   = document.createElement('a-entity');
+
+  el.setAttribute('geometry',     geoAttr(tipo));
+  el.setAttribute('material',     `color:${tipo.color};emissive:${tipo.emit};emissiveIntensity:0.22;roughness:0.45;metalness:0.3`);
+  el.setAttribute('position',     `${sx} 4.0 -3.5`);
+  el.setAttribute('rotation',     `${Math.random()*360} ${Math.random()*360} 0`);
+  el.setAttribute('shadow',       'cast:true');
+  el.setAttribute('dynamic-body', `mass:${tipo.mass};linearDamping:0.05;angularDamping:0.1`);
+
+  escena.appendChild(el);
+  residuosActivos.add(el);
+
+  // Spin inicial al cargar el cuerpo físico
+  el.addEventListener('body-loaded', () => {
+    if (!el.body) return;
+    el.body.angularVelocity.set(
+      (Math.random() - .5) * 6,
+      (Math.random() - .5) * 6,
+      (Math.random() - .5) * 4
+    );
+  }, { once: true });
+
+  // Etiqueta 2D flotante
+  const tag = document.createElement('div');
+  tag.className   = 'obj-tag';
+  tag.textContent = tipo.label;
+  document.body.appendChild(tag);
+
+  const tagInterval = setInterval(() => {
+    if (!el.parentNode) { clearInterval(tagInterval); tag.remove(); return; }
+    const p = new THREE.Vector3();
+    el.object3D.getWorldPosition(p);
+    // proyectar posición 3D a pantalla
+    const px = (p.x / 3.5 + 0.5) * window.innerWidth;
+    const py = (-p.y / 7.0 + 0.5) * window.innerHeight - 22;
+    tag.style.left = px + 'px';
+    tag.style.top  = py + 'px';
+  }, 60);
+
+  // Colisión
+  let handled = false;
+
+  const onCollide = ev => {
+    if (handled || !juegoActivo) return;
+    const otro = ev.detail?.body?.el;
+
+    if (otro && otro.id === 'caneca-hit') {
+      handled = true;
+      el.removeEventListener('collide', onCollide);
+      atrapar(tipo, el, tag, tagInterval);
+
+    } else if (otro && otro.id === 'suelo-limite') {
+      handled = true;
+      el.removeEventListener('collide', onCollide);
+      fallar(el, tag, tagInterval);
+    }
+  };
+
+  el.addEventListener('collide', onCollide);
+
+  // Timeout de seguridad: elimina si lleva mucho tiempo sin colisionar
+  const timeoutId = setTimeout(() => {
+    if (!handled && el.parentNode) {
+      handled = true;
+      el.removeEventListener('collide', onCollide);
+      destruir(el, tag, tagInterval);
+    }
+  }, 10000);
+
+  el._timeoutId = timeoutId;
+}
+
+function atrapar(tipo, el, tag, tagInterval) {
+  playAudio('#sndAcierto');
+  flash('hit');
+  bounceCaneca();
+  combo++;
+  if (combo > maxCombo) maxCombo = combo;
+  atrapados++;
+  score += 10 * combo;
+  $('score-val').textContent = score;
+  $('combo-val').textContent = `×${combo}`;
+  actualizarProg();
+  popParticulas(tipo.color);
+  destruir(el, tag, tagInterval);
+  if (atrapados >= OBJETIVO) finRonda(true);
+}
+
+function fallar(el, tag, tagInterval) {
+  playAudio('#sndNya');
+  flash('miss');
+  combo = 0;
+  $('combo-val').textContent = '×1';
+  destruir(el, tag, tagInterval);
+}
+
+function destruir(el, tag, tagInterval) {
+  clearInterval(tagInterval);
+  if (el._timeoutId) clearTimeout(el._timeoutId);
+  tag.remove();
+  residuosActivos.delete(el);
   if (el.parentNode) el.parentNode.removeChild(el);
 }
 
-function gameTick(ts) {
+// ─────────────────────────────────────────
+// GAME LOOP (RAF)
+// ─────────────────────────────────────────
+function gameLoop(timestamp) {
   if (!juegoActivo) { rafId = null; return; }
-  if (ts - lastSpawn > spawnDelay) { spawnResiduo(); lastSpawn = ts; }
-  rafId = requestAnimationFrame(gameTick);
+
+  if (timestamp - lastSpawnTime >= spawnDelay) {
+    lastSpawnTime = timestamp;
+    spawnResiduo();
+  }
+
+  rafId = requestAnimationFrame(gameLoop);
 }
 
+// ─────────────────────────────────────────
+// TIMER
+// ─────────────────────────────────────────
 function iniciarTimer() {
-  const timerEl = document.getElementById('hud-timer');
   timerSeg = TIEMPO;
-  timerEl.textContent = timerSeg;
-  timerEl.classList.remove('urgente');
-  timerInt = setInterval(() => {
+  const el = $('hud-timer');
+  el.textContent = timerSeg;
+  el.classList.remove('urgente');
+
+  timerInterval = setInterval(() => {
     timerSeg--;
-    timerEl.textContent = timerSeg;
-    if (timerSeg <= 10) timerEl.classList.add('urgente');
-    spawnDelay = Math.max(700, 2200 - ((TIEMPO - timerSeg) * 50));
-    if (timerSeg <= 0) { clearInterval(timerInt); finRonda(false); }
+    el.textContent = timerSeg;
+    if (timerSeg <= 10) el.classList.add('urgente');
+    // Acelerar spawn progresivamente
+    spawnDelay = Math.max(650, 2200 - (TIEMPO - timerSeg) * 52);
+    if (timerSeg <= 0) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+      finRonda(false);
+    }
   }, 1000);
 }
 
 function actualizarProg() {
   const pct = Math.min(100, (atrapados / OBJETIVO) * 100);
-  document.getElementById('prog-fill').style.width = pct + '%';
-  document.getElementById('prog-txt').textContent = `${atrapados} / ${OBJETIVO} atrapados`;
+  $('prog-fill').style.width = pct + '%';
+  $('prog-txt').textContent  = `${atrapados} / ${OBJETIVO} atrapados`;
 }
 
+// ─────────────────────────────────────────
+// FLUJO
+// ─────────────────────────────────────────
 function iniciarConteo() {
-  const cd = document.getElementById('countdown');
-  const num = document.getElementById('cd-num');
-
-  // Activar escena 3D
-  document.getElementById('ar-scene-wrap').classList.add('activo');
-
+  const cd  = $('countdown');
+  const num = $('cd-num');
   cd.classList.remove('hidden');
   let n = 3;
+
   const tick = () => {
-    num.textContent = n > 0 ? n : '¡YA!';
+    num.textContent = n > 0 ? String(n) : '¡YA!';
     num.animate([
-      { transform:'scale(1.5)', opacity:0 },
-      { transform:'scale(1)',   opacity:1, offset:.3 },
-      { transform:'scale(.7)', opacity:0 }
-    ], { duration:900, easing:'ease-out' });
-    if (n < 0) { setTimeout(() => { cd.classList.add('hidden'); iniciarJuego(); }, 500); return; }
+      { transform:'scale(1.6)', opacity:0 },
+      { transform:'scale(1)',   opacity:1, offset:0.25 },
+      { transform:'scale(0.7)',opacity:0 }
+    ], { duration:900, easing:'ease-out', fill:'forwards' });
+
+    if (n < 0) {
+      setTimeout(() => {
+        cd.classList.add('hidden');
+        iniciarJuego();
+      }, 400);
+      return;
+    }
     n--;
     setTimeout(tick, 950);
   };
@@ -702,101 +788,119 @@ function iniciarConteo() {
 }
 
 function iniciarJuego() {
+  // Reset estado
   score = 0; combo = 0; maxCombo = 0; atrapados = 0;
-  spawnDelay = 2200; lastSpawn = 0;
-  document.getElementById('score-val').textContent = '0';
-  document.getElementById('combo-val').textContent = '×1';
-  document.getElementById('hud-timer').classList.remove('urgente');
-  document.getElementById('ronda-txt').textContent = `RONDA ${ronda}`;
+  spawnDelay = 2200; lastSpawnTime = 0;
+
+  $('score-val').textContent = '0';
+  $('combo-val').textContent = '×1';
+  $('hud-timer').classList.remove('urgente');
+  $('ronda-txt').textContent = `RONDA ${ronda}`;
   actualizarProg();
 
-  const canecaGrupo = document.getElementById('caneca-grupo');
-  canecaGrupo.setAttribute('visible', 'true');
-
-  show('hud'); show('prog-wrap');
-  document.getElementById('tilt-hint').style.display = 'block';
+  // Mostrar caneca
+  $('caneca-grupo').setAttribute('visible', 'true');
+  showHUD(true);
 
   iniciarGiroscopio();
   juegoActivo = true;
   iniciarTimer();
-  rafId = requestAnimationFrame(gameTick);
+
+  // Arrancar el loop
+  lastSpawnTime = 0;
+  rafId = requestAnimationFrame(gameLoop);
+  console.log('[GC] Juego iniciado, ronda', ronda);
+}
+
+function limpiarJuego() {
+  juegoActivo = false;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (rafId)         { cancelAnimationFrame(rafId);  rafId = null; }
+
+  // Eliminar todos los residuos activos
+  residuosActivos.forEach(el => {
+    if (el._timeoutId) clearTimeout(el._timeoutId);
+    if (el.parentNode) el.parentNode.removeChild(el);
+  });
+  residuosActivos.clear();
+
+  // Eliminar etiquetas huérfanas
+  document.querySelectorAll('.obj-tag').forEach(t => t.remove());
+
+  $('caneca-grupo').setAttribute('visible', 'false');
+  showHUD(false);
 }
 
 function finRonda(exito) {
-  juegoActivo = false;
-  clearInterval(timerInt);
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  limpiarJuego();
 
-  const scene = document.querySelector('a-scene');
-  if (scene) {
-    scene.querySelectorAll('[dynamic-body]').forEach(e => {
-      if (e.parentNode) e.parentNode.removeChild(e);
-    });
-  }
-  document.querySelectorAll('.obj-tag').forEach(t => t.remove());
-
-  document.getElementById('caneca-grupo').setAttribute('visible', 'false');
-  hide('hud'); hide('prog-wrap');
-  document.getElementById('tilt-hint').style.display = 'none';
-
-  document.getElementById('fin-score').textContent = score;
-  document.getElementById('fin-combo').textContent = maxCombo;
-  document.getElementById('fin-atrap').textContent = atrapados;
+  $('fin-score').textContent = score;
+  $('fin-combo').textContent = maxCombo;
+  $('fin-atrap').textContent = atrapados;
 
   if (exito) {
-    document.getElementById('fin-titulo').textContent = '🏆 RONDA COMPLETADA';
-    document.getElementById('fin-sub').textContent = `¡Objetivo cumplido en ${TIEMPO - timerSeg}s!`;
-    document.getElementById('fin-badge').textContent = '🌿 ¡Buen reciclador!';
+    $('fin-titulo').textContent = '🏆 RONDA COMPLETADA';
+    $('fin-sub').textContent    = `¡Objetivo en ${TIEMPO - timerSeg}s!`;
+    $('fin-badge').textContent  = '🌿 ¡Buen reciclador!';
     ronda++;
   } else {
-    document.getElementById('fin-titulo').textContent = '⏱ TIEMPO AGOTADO';
-    document.getElementById('fin-sub').textContent = `Atrapaste ${atrapados} de ${OBJETIVO}`;
-    document.getElementById('fin-badge').textContent = `Faltan ${OBJETIVO - atrapados} para el objetivo`;
+    $('fin-titulo').textContent = '⏱ TIEMPO AGOTADO';
+    $('fin-sub').textContent    = `Atrapaste ${atrapados} de ${OBJETIVO}`;
+    $('fin-badge').textContent  = atrapados >= OBJETIVO
+      ? '🏆 ¡Objetivo cumplido!'
+      : `Faltan ${OBJETIVO - atrapados} para el objetivo`;
   }
-  show('screen-fin');
+
+  showScreen('screen-fin');
 }
 
-// ══════════════════════════════════════════
+// ─────────────────────────────────────────
 // AUXILIARES
-// ══════════════════════════════════════════
-function flash(type) {
-  const el = document.getElementById(type + '-flash');
+// ─────────────────────────────────────────
+function flash(tipo) {
+  const el = $(`${tipo}-flash`);
   el.style.opacity = '1';
-  setTimeout(() => el.style.opacity = '0', 110);
+  setTimeout(() => el.style.opacity = '0', 120);
 }
+
 function playAudio(sel) {
   const el = document.querySelector(sel);
   if (!el) return;
-  try { el.currentTime = 0; el.play(); } catch(_) {}
+  try { el.currentTime = 0; el.play().catch(() => {}); } catch(_) {}
 }
+
 function bounceCaneca() {
-  const canecaGrupo = document.getElementById('caneca-grupo');
-  canecaGrupo.removeAttribute('animation__b');
-  canecaGrupo.setAttribute('animation__b', {
-    property:'scale', from:'1.15 0.75 1.15', to:'1 1 1',
-    dur:220, easing:'easeOutElastic'
+  const cg = $('caneca-grupo');
+  if (!cg) return;
+  cg.removeAttribute('animation__bounce');
+  cg.setAttribute('animation__bounce', {
+    property:'scale', from:'1.18 0.72 1.18', to:'1 1 1',
+    dur:240, easing:'easeOutElastic'
   });
 }
-function popParticles(color) {
-  const chars = ['✦','◆','★','·','✧'];
-  for (let i = 0; i < 7; i++) {
+
+function popParticulas(color) {
+  const chars = ['✦','◆','★','·','✧','◇'];
+  for (let i = 0; i < 8; i++) {
     const p = document.createElement('div');
-    p.style.cssText = `position:fixed;font-size:20px;color:${color};pointer-events:none;z-index:9999;left:50%;top:45%;`;
+    p.style.cssText = `position:fixed;font-size:18px;color:${color};pointer-events:none;z-index:9999;left:50%;top:45%;`;
     p.textContent = chars[i % chars.length];
     document.body.appendChild(p);
-    const a = (i / 7) * Math.PI * 2, d = 55 + Math.random() * 55;
+    const ang = (i / 8) * Math.PI * 2;
+    const dist = 50 + Math.random() * 60;
     p.animate([
       { transform:'translate(-50%,-50%)', opacity:1 },
-      { transform:`translate(calc(-50% + ${Math.cos(a)*d}px),calc(-50% + ${Math.sin(a)*d}px))`, opacity:0 }
-    ], { duration:440, easing:'ease-out' }).onfinish = () => p.remove();
+      { transform:`translate(calc(-50% + ${Math.cos(ang)*dist}px),calc(-50% + ${Math.sin(ang)*dist}px))`, opacity:0 }
+    ], { duration:460, easing:'ease-out' }).onfinish = () => p.remove();
   }
 }
 
-// ══════════════════════════════════════════
-// ARRANQUE
-// ══════════════════════════════════════════
-iniciarCamaraEscaneo();
-iniciarDeteccionEscaneo();
+// ─────────────────────────────────────────
+// INICIO
+// ─────────────────────────────────────────
+ronda = 1;
+// La pantalla de escaneo está visible por defecto (no tiene clase hidden)
+// MindAR abrirá la cámara automáticamente al cargar la escena
 
 })();
 </script>
