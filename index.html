@@ -8,28 +8,17 @@
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
     
     <style>
-        /* CORRECCIÓN: Forzar transparencia total de las capas HTML y evitar pantalla blanca */
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
             background-color: transparent !important;
         }
-        a-scene {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
+        a-scene { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
     </style>
 </head>
 
 <body>
 
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.001; filterBeta:0.01;"
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0005; filterBeta:0.1;"
         physics="debug: false; gravity: -9.8" embedded vr-mode-ui="enabled: false"
         device-orientation-permission-ui="enabled: false">
 
@@ -39,8 +28,9 @@
         </a-assets>
 
         <a-entity mindar-image-target="targetIndex: 0" id="target-contenedor">
-            <a-cylinder id="caneca" position="0 0 -1" radius="0.15" height="0.4" color="#00FF00" static-body
-                geometry="primitive: cylinder; radius: 0.15; height: 0.4">
+            <a-cylinder id="caneca" position="0 -0.1 -1" radius="0.22" height="0.5" color="#1b4d3e" static-body
+                geometry="primitive: cylinder; radius: 0.22; height: 0.5" material="roughness: 0.5; metalness: 0.2">
+                <a-torus position="0 0.25 0" radius="0.22" radius-tubular="0.01" color="#00ff88"></a-torus>
             </a-cylinder>
         </a-entity>
 
@@ -50,12 +40,20 @@
 
     <script>
         (function () {
-            // ── Config ──────────────────────────────────────────────
-            const IMPULSE_STRENGTH = 4.5;
-            const SPHERE_R = 0.06;
-            const BOUNDS_Y = -2.2;
-            const MOVE_RANGE = 0.30;
+            // ── Config Mejorada ──────────────────────────────────────
+            const IMPULSE_STRENGTH = 5.0;
+            const SPHERE_R = 0.10; // MEJORA: Residuos más grandes (de 0.06 subió a 0.10)
+            const BOUNDS_Y = -2.5;
+            const MOVE_RANGE = 0.35; 
             let score = 0, combo = 0, activeDebris = [];
+
+            // Paleta de colores que simulan materiales reciclables reales
+            const wasteTypes = [
+                { color: '#3b82f6', type: 'Plástico' }, // Azul
+                { color: '#9ca3af', type: 'Lata Aluminio' }, // Gris/Metal
+                { color: '#f59e0b', type: 'Cartón' }, // Amarillo/Café
+                { color: '#ef4444', type: 'Desecho Orgánico' } // Rojo
+            ];
 
             // ── HUD ─────────────────────────────────────────────────
             const hud = document.createElement('div');
@@ -74,10 +72,10 @@
   @keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.4)} 100%{transform:scale(1)} }
 </style>
 <div class="score-bar">
-  <div><div class="label">puntos</div><div class="score" id="score-val">0</div></div>
+  <div><div class="label">GreenCoins</div><div class="score" id="score-val">0</div></div>
   <div style="text-align:right"><div class="label">combo</div><div class="combo" id="combo-val">x1</div></div>
 </div>
-<div class="hint" id="hint">↑ DESLIZA PARA LANZAR</div>
+<div class="hint" id="hint">↑ DESLIZA HACIA ARRIBA PARA RECICLAR</div>
 <div class="hit-flash" id="hit-flash"></div>
 <div class="miss-flash" id="miss-flash"></div>`;
             document.body.appendChild(hud);
@@ -106,7 +104,7 @@
             document.addEventListener('touchend', e => {
                 if (!touchStart) return;
                 const t = e.changedTouches[0];
-                const dy = touchStart.y - t.clientY;   // positive = swipe up
+                const dy = touchStart.y - t.clientY;
                 const dx = t.clientX - touchStart.x;
                 const dt = Date.now() - touchStart.time;
                 touchStart = null;
@@ -121,13 +119,19 @@
 
                 document.getElementById('hint').style.opacity = '0';
 
+                // MEJORA: Elegir un tipo de residuo aleatorio con su color representativo
+                const randomWaste = wasteTypes[Math.floor(Math.random() * wasteTypes.length)];
+
                 const sphere = document.createElement('a-sphere');
-                const color = `hsl(${Math.random() * 360 | 0},90%,60%)`;
                 sphere.setAttribute('radius', SPHERE_R);
-                sphere.setAttribute('color', color);
-                sphere.setAttribute('position', '0 -0.3 -0.5');
-                sphere.setAttribute('dynamic-body', 'mass: 0.3; linearDamping: 0.01');
+                sphere.setAttribute('color', randomWaste.color);
+                sphere.setAttribute('position', '0 -0.2 -0.6'); // Ajustada la salida del tiro
+                sphere.setAttribute('dynamic-body', 'mass: 0.4; linearDamping: 0.02');
                 sphere.setAttribute('shadow', 'cast: true');
+                
+                // Efecto visual extra: hacerlo un poco rugoso como una abolladura
+                sphere.setAttribute('material', 'roughness: 0.8; metalness: 0.1');
+                
                 scene.appendChild(sphere);
                 activeDebris.push(sphere);
 
@@ -140,10 +144,10 @@
                     const dir = cp.clone().sub(sp).normalize();
 
                     const speed = Math.min(IMPULSE_STRENGTH * (dy / 120), IMPULSE_STRENGTH * 1.6);
-                    const lateral = (dx / window.innerWidth) * 2;
+                    const lateral = (dx / window.innerWidth) * 2.5;
 
                     body.applyImpulse(
-                        new CANNON.Vec3(dir.x * speed + lateral, dir.y * speed + 1.5, dir.z * speed),
+                        new CANNON.Vec3(dir.x * speed + lateral, dir.y * speed + 1.8, dir.z * speed),
                         new CANNON.Vec3(0, 0, 0)
                     );
                 });
