@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+</head>
+
+<body>
+
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.001; filterBeta:0.01;"
+        physics="debug: false; gravity: -9.8" embedded vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+
+        <a-assets>
+            <audio id="soundAcierto" src="./acierto.mp3"></audio>
+            <audio id="soundNya" src="./nya.mp3"></audio>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity mindar-image-target="targetIndex: 0" id="target-contenedor">
+            <a-cylinder id="caneca" position="0 -0.2 -1" radius="0.15" height="0.4" color="#00FF00" static-body
+                geometry="primitive: cylinder; radius: 0.15; height: 0.4">
+            </a-cylinder>
+        </a-entity>
+
+    </a-scene>
+    <script>
+        (function () {
+            // ── Config ──────────────────────────────────────────────
+            const IMPULSE_STRENGTH = 4.5;
+            const SPHERE_R = 0.06;
+            const BOUNDS_Y = -2.2;
+            const MOVE_RANGE = 0.30;
+            let score = 0, combo = 0, activeDebris = [];
+
+            // ── HUD ─────────────────────────────────────────────────
+            const hud = document.createElement('div');
+            hud.id = 'hud';
+            hud.innerHTML = `
+<style>
+  #hud { position:fixed; top:0; left:0; width:100%; pointer-events:none; z-index:999; font-family:'Courier New',monospace; }
+  #hud .score-bar { display:flex; justify-content:space-between; align-items:center; padding:14px 20px 0; }
+  #hud .score { font-size:28px; font-weight:900; color:#00ff88; text-shadow:0 0 20px #00ff8880; letter-spacing:-1px; }
+  #hud .label { font-size:10px; color:#ffffff60; letter-spacing:3px; text-transform:uppercase; }
+  #hud .combo { font-size:13px; color:#ffcc00; text-shadow:0 0 10px #ffcc0080; transition:opacity .4s; }
+  #hud .hint { position:fixed; bottom:48px; left:50%; transform:translateX(-50%); font-size:12px; color:#ffffff50; letter-spacing:2px; text-align:center; animation:pulse 2s ease-in-out infinite; }
+  #hud .hit-flash { position:fixed; inset:0; pointer-events:none; background:#00ff8818; opacity:0; transition:opacity .1s; }
+  #hud .miss-flash { position:fixed; inset:0; pointer-events:none; background:#ff004418; opacity:0; transition:opacity .1s; }
+  @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:.7} }
+  @keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.4)} 100%{transform:scale(1)} }
+</style>
+<div class="score-bar">
+  <div><div class="label">puntos</div><div class="score" id="score-val">0</div></div>
+  <div style="text-align:right"><div class="label">combo</div><div class="combo" id="combo-val">x1</div></div>
+</div>
+<div class="hint" id="hint">↑ DESLIZA PARA LANZAR</div>
+<div class="hit-flash" id="hit-flash"></div>
+<div class="miss-flash" id="miss-flash"></div>`;
+            document.body.appendChild(hud);
+
+            function updateHUD() {
+                document.getElementById('score-val').textContent = score;
+                const cv = document.getElementById('combo-val');
+                cv.textContent = `x${combo}`;
+                cv.style.animation = 'none';
+                requestAnimationFrame(() => cv.style.animation = 'pop .25s ease');
+            }
+
+            function flash(type) {
+                const el = document.getElementById(type + '-flash');
+                el.style.opacity = '1';
+                setTimeout(() => el.style.opacity = '0', 120);
+            }
+
+            // ── Touch: detect flick up ───────────────────────────────
+            let touchStart = null;
+            document.addEventListener('touchstart', e => {
+                const t = e.touches[0];
+                touchStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+            }, { passive: true });
+
+            document.addEventListener('touchend', e => {
+                if (!touchStart) return;
+                const t = e.changedTouches[0];
+                const dy = touchStart.y - t.clientY;   // positive = swipe up
+                const dx = t.clientX - touchStart.x;
+                const dt = Date.now() - touchStart.time;
+                touchStart = null;
+                if (dy > 40 && dt < 400) launchDebris(dy, dx, dt);
+            }, { passive: true });
+
+            // ── Launch ───────────────────────────────────────────────
+            function launchDebris(dy, dx, dt) {
+                const scene = document.querySelector('a-scene');
+                const caneca = document.querySelector('#caneca');
+                if (!scene || !caneca) return;
+
+                // Hide hint after first throw
+                document.getElementById('hint').style.opacity = '0';
+
+                const sphere = document.createElement('a-sphere');
+                const color = `hsl(${Math.random() * 360 | 0},90%,60%)`;
+                sphere.setAttribute('radius', SPHERE_R);
+                sphere.setAttribute('color', color);
+                sphere.setAttribute('position', '0 -0.3 -0.5');
+                sphere.setAttribute('dynamic-body', 'mass: 0.3; linearDamping: 0.01');
+                sphere.setAttribute('shadow', 'cast: true');
+                scene.appendChild(sphere);
+                activeDebris.push(sphere);
+
+                sphere.addEventListener('loaded', () => {
+                    const body = sphere.body;
+                    if (!body) return;
+
+                    // Compute direction toward caneca
+                    const cp = caneca.object3D.getWorldPosition(new THREE.Vector3());
+                    const sp = sphere.object3D.getWorldPosition(new THREE.Vector3());
+                    const dir = cp.clone().sub(sp).normalize();
+
+                    // Scale impulse by flick speed
+                    const speed = Math.min(IMPULSE_STRENGTH * (dy / 120), IMPULSE_STRENGTH * 1.6);
+                    const lateral = (dx / window.innerWidth) * 2;
+
+                    body.applyImpulse(
+                        new CANNON.Vec3(dir.x * speed + lateral, dir.y * speed + 1.5, dir.z * speed),
+                        new CANNON.Vec3(0, 0, 0)
+                    );
+                });
+
+                // Collision
+                sphere.addEventListener('collide', e => {
+                    const other = e.detail.body?.el;
+                    if (other && other.id === 'caneca') {
+                        hit(sphere);
+                    }
+                });
+
+                // Out-of-bounds watcher
+                const interval = setInterval(() => {
+                    if (!sphere.parentNode) { clearInterval(interval); return; }
+                    const y = sphere.object3D.position.y;
+                    if (y < BOUNDS_Y) { clearInterval(interval); miss(sphere); }
+                }, 200);
+            }
+
+            // ── Hit ──────────────────────────────────────────────────
+            function hit(sphere) {
+                if (!sphere.parentNode) return;
+                playAudio('#soundAcierto');
+                flash('hit');
+                combo++;
+                score += 10 * combo;
+                updateHUD();
+                spawnParticles();
+                destroy(sphere);
+            }
+
+            // ── Miss ─────────────────────────────────────────────────
+            function miss(sphere) {
+                if (!sphere.parentNode) return;
+                playAudio('#soundNya');
+                flash('miss');
+                combo = 0;
+                updateHUD();
+                destroy(sphere);
+            }
+
+            function destroy(sphere) {
+                activeDebris = activeDebris.filter(s => s !== sphere);
+                if (sphere.parentNode) sphere.parentNode.removeChild(sphere);
+            }
+
+            // ── Audio ────────────────────────────────────────────────
+            function playAudio(selector) {
+                const el = document.querySelector(selector);
+                if (!el) return;
+                try { el.currentTime = 0; el.play(); } catch (_) { }
+            }
+
+            // ── Caneca movement (erratic double-sine) ───────────────
+            let t = 0;
+            setInterval(() => {
+                const caneca = document.querySelector('#caneca');
+                if (!caneca) return;
+                t += 0.016;
+                const x = MOVE_RANGE * (0.6 * Math.sin(t * 0.8) + 0.4 * Math.sin(t * 2.1 + 1.3));
+                const pos = caneca.getAttribute('position');
+                caneca.setAttribute('position', `${x.toFixed(3)} ${pos.y} ${pos.z}`);
+                // Sync physics body
+                if (caneca.body) {
+                    caneca.body.position.x = x;
+                    caneca.body.velocity.set(0, 0, 0);
+                }
+            }, 16);
+
+            // ── ASCII particles on hit ───────────────────────────────
+            function spawnParticles() {
+                const chars = ['✦', '★', '·', '◆', '*'];
+                for (let i = 0; i < 6; i++) {
+                    const p = document.createElement('div');
+                    p.style.cssText = `position:fixed;font-size:18px;color:#00ff88;pointer-events:none;left:50%;top:40%;z-index:9999;`;
+                    p.textContent = chars[i % chars.length];
+                    document.body.appendChild(p);
+                    const angle = (i / 6) * Math.PI * 2;
+                    const dist = 60 + Math.random() * 40;
+                    p.animate([
+                        { transform: `translate(-50%,-50%) translate(0,0)`, opacity: 1 },
+                        { transform: `translate(-50%,-50%) translate(${Math.cos(angle) * dist}px,${Math.sin(angle) * dist}px)`, opacity: 0 }
+                    ], { duration: 500, easing: 'ease-out' }).onfinish = () => p.remove();
+                }
+            }
+        })();
+    </script>
+</body>
+
+</html>
