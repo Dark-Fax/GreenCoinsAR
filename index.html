@@ -5,46 +5,50 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body,html{width:100%;height:100%;overflow:hidden;background:#000;
-      font-family:'Inter',sans-serif}
+    body,html{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter',sans-serif}
 
-    /* ══ CÁMARA FONDO ══ */
+    /* ── CÁMARA FONDO (solo fase escaneo) ── */
     #cam-bg{
       position:fixed;inset:0;width:100%;height:100%;
-      object-fit:cover;z-index:0;
+      object-fit:cover;z-index:0;display:none;
     }
+    #cam-bg.activo{display:block}
 
-    /* ══ A-FRAME TRANSPARENTE ══ */
-    a-scene{position:fixed;inset:0;width:100%;height:100%;z-index:1}
+    /* ── A-FRAME (solo fase juego) ── */
+    #ar-scene-wrap{
+      position:fixed;inset:0;width:100%;height:100%;
+      z-index:1;display:none;
+    }
+    #ar-scene-wrap.activo{display:block}
+    a-scene{width:100%;height:100%}
     canvas{background:transparent!important}
 
-    /* ══ OVERLAY BASE ══ */
-    .layer{position:fixed;inset:0;z-index:10;pointer-events:none}
+    /* ══ PANTALLAS ══ */
+    .screen{
+      position:fixed;inset:0;z-index:100;
+      display:flex;flex-direction:column;
+      transition:opacity .4s;
+    }
+    .screen.hidden{opacity:0;pointer-events:none!important}
+    .screen.hidden *{pointer-events:none!important}
 
     /* ══ PANTALLA ESCANEO ══ */
     #screen-scan{
-      position:fixed;inset:0;z-index:20;
-      display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+      align-items:center;justify-content:flex-end;
       padding-bottom:60px;
-      background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.6) 100%);
-      transition:opacity .5s;
+      background:linear-gradient(180deg,rgba(0,0,0,.15) 0%,rgba(0,0,0,.65) 100%);
     }
-    #screen-scan.hidden{opacity:0;pointer-events:none}
     .scan-frame{
       position:absolute;top:50%;left:50%;
       width:220px;height:220px;
-      transform:translate(-50%,-60%);
+      transform:translate(-50%,-62%);
     }
-    .scan-corner{
-      position:absolute;width:36px;height:36px;
-      border-color:#34d399;border-style:solid;border-width:0;
-    }
+    .scan-corner{position:absolute;width:36px;height:36px;border-color:#34d399;border-style:solid;border-width:0}
     .scan-corner.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-radius:6px 0 0 0}
     .scan-corner.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 6px 0 0}
     .scan-corner.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 6px}
@@ -55,309 +59,166 @@
       animation:scan-anim 2s ease-in-out infinite;top:0;
     }
     @keyframes scan-anim{0%{top:0;opacity:.8}50%{top:calc(100% - 2px)}100%{top:0;opacity:.8}}
-    .scan-label{
-      font-family:'Orbitron',monospace;font-size:.7rem;
-      color:#34d399;letter-spacing:3px;text-transform:uppercase;
-      margin-bottom:12px;opacity:.8;
-    }
-    .app-title{
-      font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:900;
-      color:#fff;letter-spacing:2px;text-align:center;margin-bottom:6px;
-      text-shadow:0 0 24px #34d39988;
-    }
-    .app-sub{
-      font-size:.75rem;color:#ffffff66;letter-spacing:1px;
-      text-align:center;margin-bottom:32px;
-    }
+    .scan-label{font-family:'Orbitron',monospace;font-size:.7rem;color:#34d399;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;opacity:.8}
+    .app-title{font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:900;color:#fff;letter-spacing:2px;text-align:center;margin-bottom:6px;text-shadow:0 0 24px #34d39988}
+    .app-sub{font-size:.75rem;color:#ffffff66;letter-spacing:1px;text-align:center;margin-bottom:32px}
 
     /* ══ MENÚ PRINCIPAL ══ */
     #screen-menu{
-      position:fixed;inset:0;z-index:20;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:16px;padding:24px;
-      background:rgba(0,0,0,.7);backdrop-filter:blur(12px);
-      transition:opacity .4s;
+      align-items:center;justify-content:center;gap:16px;padding:24px;
+      background:rgba(0,0,0,.88);backdrop-filter:blur(12px);
     }
-    #screen-menu.hidden{opacity:0;pointer-events:none}
-    .menu-logo{
-      font-family:'Orbitron',monospace;font-size:1.8rem;font-weight:900;
-      color:#34d399;text-shadow:0 0 28px #34d39988;
-      margin-bottom:8px;letter-spacing:3px;
-    }
+    .menu-logo{font-family:'Orbitron',monospace;font-size:1.8rem;font-weight:900;color:#34d399;text-shadow:0 0 28px #34d39988;margin-bottom:8px;letter-spacing:3px}
     .menu-sub{font-size:.72rem;color:#ffffff55;letter-spacing:2px;margin-bottom:20px}
     .menu-card{
       width:100%;max-width:320px;
-      background:rgba(255,255,255,.05);
-      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.14);
       border-radius:16px;padding:20px 22px;
       display:flex;align-items:center;gap:16px;
-      cursor:pointer;pointer-events:all;
+      cursor:pointer;
       transition:background .2s,border-color .2s,transform .15s;
       -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;
+      user-select:none;
     }
-    .menu-card:active{background:rgba(52,211,153,.15);border-color:#34d399;transform:scale(.97)}
+    .menu-card:hover{background:rgba(52,211,153,.1);border-color:#34d39966}
+    .menu-card:active{background:rgba(52,211,153,.2);border-color:#34d399;transform:scale(.97)}
     .menu-icon{font-size:2.2rem;flex-shrink:0}
     .menu-text h3{font-family:'Orbitron',monospace;font-size:.9rem;color:#fff;margin-bottom:4px}
     .menu-text p{font-size:.7rem;color:#ffffff55;line-height:1.5}
-    .menu-badge{
-      margin-left:auto;background:#34d39922;border:1px solid #34d39966;
-      border-radius:20px;padding:3px 10px;
-      font-size:.6rem;color:#34d399;letter-spacing:1px;white-space:nowrap;
-    }
+    .menu-badge{margin-left:auto;background:#34d39922;border:1px solid #34d39966;border-radius:20px;padding:3px 10px;font-size:.6rem;color:#34d399;letter-spacing:1px;white-space:nowrap}
 
     /* ══ PANTALLA TUTORIAL ══ */
     #screen-tutorial{
-      position:fixed;inset:0;z-index:20;
-      display:flex;flex-direction:column;
-      background:rgba(0,10,5,.92);backdrop-filter:blur(14px);
-      transition:opacity .4s;overflow-y:auto;
+      background:rgba(0,10,5,.95);backdrop-filter:blur(14px);
+      overflow-y:auto;-webkit-overflow-scrolling:touch;
     }
-    #screen-tutorial.hidden{opacity:0;pointer-events:none}
-    .tut-header{
-      padding:20px 22px 12px;
-      display:flex;align-items:center;gap:12px;
-      border-bottom:1px solid #ffffff0f;
-    }
-    .tut-back{
-      font-size:1.4rem;cursor:pointer;pointer-events:all;
-      -webkit-tap-highlight-color:transparent;
-    }
+    .tut-header{padding:20px 22px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #ffffff0f;flex-shrink:0}
+    .tut-back{font-size:1.4rem;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;padding:4px 8px}
     .tut-title{font-family:'Orbitron',monospace;font-size:1rem;color:#34d399}
-    .tut-body{padding:20px 22px;display:flex;flex-direction:column;gap:20px;pointer-events:all}
-
-    /* Canecas guía */
+    .tut-body{padding:20px 22px;display:flex;flex-direction:column;gap:20px}
     .canecas-grid{display:flex;gap:10px;justify-content:center}
-    .caneca-card{
-      flex:1;border-radius:12px;padding:14px 8px;
-      text-align:center;border:1px solid rgba(255,255,255,.1);
-    }
+    .caneca-card{flex:1;border-radius:12px;padding:14px 8px;text-align:center;border:1px solid rgba(255,255,255,.1)}
     .caneca-card.blanca{background:rgba(255,255,255,.07);border-color:#ffffff33}
-    .caneca-card.verde {background:rgba(52,211,153,.1); border-color:#34d39944}
-    .caneca-card.negra {background:rgba(0,0,0,.4);      border-color:#ffffff22}
+    .caneca-card.verde{background:rgba(52,211,153,.1);border-color:#34d39944}
+    .caneca-card.negra{background:rgba(0,0,0,.4);border-color:#ffffff22}
     .caneca-icon{font-size:2rem;margin-bottom:6px}
     .caneca-color{font-size:.6rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px}
     .caneca-card.blanca .caneca-color{color:#e5e7eb}
-    .caneca-card.verde  .caneca-color{color:#34d399}
-    .caneca-card.negra  .caneca-color{color:#9ca3af}
+    .caneca-card.verde .caneca-color{color:#34d399}
+    .caneca-card.negra .caneca-color{color:#9ca3af}
     .caneca-items{font-size:.62rem;color:#ffffff66;line-height:1.7}
-
-    /* Eco datos */
-    .eco-card{
-      background:rgba(52,211,153,.07);border:1px solid #34d39922;
-      border-radius:12px;padding:14px 16px;
-      display:flex;align-items:flex-start;gap:12px;
-    }
+    .eco-card{background:rgba(52,211,153,.07);border:1px solid #34d39922;border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px}
     .eco-icon{font-size:1.5rem;flex-shrink:0;margin-top:2px}
     .eco-text h4{font-size:.8rem;color:#34d399;margin-bottom:4px;font-weight:600}
     .eco-text p{font-size:.7rem;color:#ffffff77;line-height:1.5}
-
-    /* Tutorial animado: residuos → canecas */
-    .tut-anim{
-      background:rgba(255,255,255,.03);border:1px solid #ffffff0f;
-      border-radius:12px;padding:16px;text-align:center;
-    }
+    .tut-anim{background:rgba(255,255,255,.03);border:1px solid #ffffff0f;border-radius:12px;padding:16px;text-align:center}
     .tut-anim h4{font-size:.75rem;color:#fff;letter-spacing:1px;margin-bottom:14px;opacity:.7}
     .residuo-demo{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
     .residuo-chip{
       background:rgba(255,255,255,.07);border-radius:20px;
-      padding:6px 12px;font-size:.72rem;color:#fff;
+      padding:8px 14px;font-size:.72rem;color:#fff;
       display:flex;align-items:center;gap:6px;
-      cursor:pointer;pointer-events:all;transition:background .2s;
+      cursor:pointer;transition:background .2s;
       -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;user-select:none;
     }
-    .residuo-chip:active{background:rgba(52,211,153,.2)}
+    .residuo-chip:active{background:rgba(52,211,153,.25)}
     .residuo-chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-    .tut-resultado{
-      margin-top:12px;min-height:36px;font-size:.78rem;
-      color:#34d399;font-weight:600;letter-spacing:1px;
-      transition:opacity .3s;opacity:0;
-    }
+    .tut-resultado{margin-top:12px;min-height:36px;font-size:.78rem;color:#34d399;font-weight:600;letter-spacing:1px;transition:opacity .3s;opacity:0}
     .tut-resultado.show{opacity:1}
 
     /* ══ HUD JUEGO ══ */
-    #hud{
-      position:fixed;top:0;left:0;width:100%;
-      pointer-events:none;z-index:15;
-    }
+    #hud{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:50}
     #hud.hidden{display:none}
-    .score-bar{
-      display:flex;justify-content:space-between;align-items:flex-start;
-      padding:14px 20px 0;
-      background:linear-gradient(180deg,rgba(0,0,0,.6) 0%,transparent 100%);
-    }
+    .score-bar{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 20px 0;background:linear-gradient(180deg,rgba(0,0,0,.6) 0%,transparent 100%)}
     .hud-lbl{font-size:9px;color:#ffffff55;letter-spacing:2px;text-transform:uppercase}
-    .hud-score{font-size:30px;font-weight:900;font-family:'Orbitron',monospace;
-      color:#34d399;text-shadow:0 0 16px #34d39966;line-height:1}
-    .hud-combo{font-size:18px;font-weight:700;font-family:'Orbitron',monospace;
-      color:#fbbf24;text-shadow:0 0 10px #fbbf2466;text-align:right}
-    #hud-timer{
-      position:fixed;top:14px;left:50%;transform:translateX(-50%);
-      font-family:'Orbitron',monospace;font-size:13px;
-      color:#ffffffcc;letter-spacing:2px;z-index:15;pointer-events:none;
-    }
+    .hud-score{font-size:30px;font-weight:900;font-family:'Orbitron',monospace;color:#34d399;text-shadow:0 0 16px #34d39966;line-height:1}
+    .hud-combo{font-size:18px;font-weight:700;font-family:'Orbitron',monospace;color:#fbbf24;text-shadow:0 0 10px #fbbf2466;text-align:right}
+    #hud-timer{position:fixed;top:14px;left:50%;transform:translateX(-50%);font-family:'Orbitron',monospace;font-size:13px;color:#ffffffcc;letter-spacing:2px;z-index:50;pointer-events:none}
     #hud-timer.urgente{color:#f87171;animation:blink .45s ease-in-out infinite}
-
-    /* Barra progreso */
-    #prog-wrap{
-      position:fixed;top:68px;left:18px;right:18px;z-index:15;pointer-events:none;
-    }
+    #prog-wrap{position:fixed;top:68px;left:18px;right:18px;z-index:50;pointer-events:none}
     #prog-wrap.hidden{display:none}
-    #prog-info{display:flex;justify-content:space-between;
-      font-size:9px;color:#ffffff55;letter-spacing:1px;margin-bottom:4px}
+    #prog-info{display:flex;justify-content:space-between;font-size:9px;color:#ffffff55;letter-spacing:1px;margin-bottom:4px}
     #prog-bg{height:3px;background:#ffffff12;border-radius:2px}
-    #prog-fill{height:3px;background:#34d399;border-radius:2px;
-      transition:width .3s;box-shadow:0 0 8px #34d39988;width:0%}
-
-    /* Tilt indicator */
-    #tilt-hint{
-      position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
-      font-size:10px;color:#ffffff30;letter-spacing:2px;
-      font-family:'Orbitron',monospace;text-align:center;
-      pointer-events:none;z-index:15;
-      animation:blink 2.5s ease-in-out infinite;
-    }
+    #prog-fill{height:3px;background:#34d399;border-radius:2px;transition:width .3s;box-shadow:0 0 8px #34d39988;width:0%}
+    #tilt-hint{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);font-size:10px;color:#ffffff30;letter-spacing:2px;font-family:'Orbitron',monospace;text-align:center;pointer-events:none;z-index:50;animation:blink 2.5s ease-in-out infinite;display:none}
     @keyframes blink{0%,100%{opacity:.3}50%{opacity:.9}}
 
-    /* ══ PANTALLA FIN RONDA ══ */
+    /* ══ FIN RONDA ══ */
     #screen-fin{
-      position:fixed;inset:0;z-index:20;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      padding:28px;
-      background:rgba(0,0,0,.82);backdrop-filter:blur(14px);
-      transition:opacity .4s;
+      align-items:center;justify-content:center;padding:28px;
+      background:rgba(0,0,0,.88);backdrop-filter:blur(14px);
     }
-    #screen-fin.hidden{opacity:0;pointer-events:none}
-    .fin-title{font-family:'Orbitron',monospace;font-size:1.5rem;font-weight:900;
-      color:#34d399;text-align:center;margin-bottom:6px;
-      text-shadow:0 0 20px #34d39988}
+    .fin-title{font-family:'Orbitron',monospace;font-size:1.5rem;font-weight:900;color:#34d399;text-align:center;margin-bottom:6px;text-shadow:0 0 20px #34d39988}
     .fin-sub{font-size:.72rem;color:#ffffff55;letter-spacing:1px;margin-bottom:24px}
     .stats-row{display:flex;gap:24px;margin-bottom:24px}
     .stat{text-align:center}
     .stat .n{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;color:#fbbf24}
     .stat .l{font-size:.6rem;color:#ffffff55;letter-spacing:2px;margin-top:2px}
-    .fin-badge{
-      background:#34d39918;border:1px solid #34d39944;border-radius:8px;
-      padding:8px 20px;font-size:.72rem;color:#34d399;
-      letter-spacing:1px;margin-bottom:24px;text-align:center;
-    }
-    .btn{
-      padding:14px 36px;border:2px solid #34d399;border-radius:8px;
-      background:transparent;color:#34d399;font-family:'Orbitron',monospace;
-      font-size:.8rem;letter-spacing:2px;cursor:pointer;
-      pointer-events:all;-webkit-tap-highlight-color:transparent;
-      transition:all .2s;margin:4px;
-    }
+    .fin-badge{background:#34d39918;border:1px solid #34d39944;border-radius:8px;padding:8px 20px;font-size:.72rem;color:#34d399;letter-spacing:1px;margin-bottom:24px;text-align:center}
+    .btn{padding:14px 36px;border:2px solid #34d399;border-radius:8px;background:transparent;color:#34d399;font-family:'Orbitron',monospace;font-size:.8rem;letter-spacing:2px;cursor:pointer;transition:all .2s;margin:4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
     .btn:active{background:#34d39922;transform:scale(.97)}
     .btn.secondary{border-color:#ffffff33;color:#ffffff66;font-size:.7rem}
 
-    /* Countdown */
-    #countdown{
-      position:fixed;inset:0;z-index:18;pointer-events:none;
-      display:flex;align-items:center;justify-content:center;
-    }
+    /* ══ COUNTDOWN ══ */
+    #countdown{position:fixed;inset:0;z-index:200;pointer-events:none;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)}
     #countdown.hidden{display:none}
-    #cd-num{
-      font-family:'Orbitron',monospace;font-size:110px;font-weight:900;
-      color:#34d399;text-shadow:0 0 40px #34d39988;
-    }
+    #cd-num{font-family:'Orbitron',monospace;font-size:110px;font-weight:900;color:#34d399;text-shadow:0 0 40px #34d39988}
 
     /* Flash */
-    .flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .08s;z-index:16}
+    .flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .08s;z-index:60}
     #hit-flash{background:radial-gradient(circle,#34d39930 0%,transparent 70%)}
     #miss-flash{background:radial-gradient(circle,#f8717130 0%,transparent 70%)}
+    .obj-tag{position:fixed;pointer-events:none;z-index:55;font-size:9px;color:#fff;background:#00000077;border:1px solid #ffffff22;border-radius:3px;padding:1px 5px;letter-spacing:1px;transform:translateX(-50%)}
 
-    /* Etiqueta objeto */
-    .obj-tag{
-      position:fixed;pointer-events:none;z-index:14;
-      font-size:9px;color:#fff;background:#00000077;
-      border:1px solid #ffffff22;border-radius:3px;
-      padding:1px 5px;letter-spacing:1px;transform:translateX(-50%);
-    }
-
-    /* Gyro fallback */
-    #gyro-btn{
-      position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
-      z-index:30;background:#34d39922;border:1px solid #34d39944;
-      color:#34d399;font-family:'Orbitron',monospace;font-size:.65rem;
-      letter-spacing:1px;padding:8px 16px;border-radius:6px;
-      cursor:pointer;pointer-events:all;display:none;
-    }
+    /* Gyro btn */
+    #gyro-btn{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:150;background:#34d39922;border:1px solid #34d39944;color:#34d399;font-family:'Orbitron',monospace;font-size:.65rem;letter-spacing:1px;padding:8px 16px;border-radius:6px;cursor:pointer;display:none;touch-action:manipulation}
   </style>
 </head>
 <body>
 
-<!-- Cámara real fondo -->
+<!-- Video de fondo para fase escaneo -->
 <video id="cam-bg" autoplay playsinline muted></video>
 
-<!-- A-Frame con MindAR -->
-<a-scene
-  mindar-image="imageTargetSrc:./targets.mind; filterMinCF:0.001; filterBeta:0.01; uiScanning:#scan-ui-placeholder"
-  physics="driver:local; gravity:-11; iterations:18; debug:false"
-  embedded vr-mode-ui="enabled:false"
-  renderer="antialias:true; alpha:true; colorManagement:true"
-  background="color:transparent">
+<!-- A-Frame (oculto hasta que se inicia el juego) -->
+<div id="ar-scene-wrap">
+  <a-scene
+    physics="driver:local; gravity:-11; iterations:18; debug:false"
+    embedded vr-mode-ui="enabled:false"
+    renderer="antialias:true; alpha:true; colorManagement:true"
+    background="color:#0d1f12">
 
-  <a-assets>
-    <audio id="soundAcierto" src="./acierto.mp3" preload="auto"></audio>
-    <audio id="soundNya"     src="./nya.mp3"     preload="auto"></audio>
-  </a-assets>
+    <a-assets>
+      <audio id="soundAcierto" src="./acierto.mp3" preload="auto"></audio>
+      <audio id="soundNya"     src="./nya.mp3"     preload="auto"></audio>
+    </a-assets>
 
-  <a-entity light="type:ambient;intensity:0.8"></a-entity>
-  <a-entity light="type:directional;intensity:0.7;castShadow:true" position="2 5 3"></a-entity>
+    <a-entity light="type:ambient;intensity:0.8"></a-entity>
+    <a-entity light="type:directional;intensity:0.7;castShadow:true" position="2 5 3"></a-entity>
 
-  <!-- Target MindAR: solo para el escaneo inicial -->
-  <a-entity mindar-image-target="targetIndex:0" id="ar-target">
-    <!-- Nada visual aquí, solo detectamos el evento -->
-  </a-entity>
+    <!-- CANECA 3D -->
+    <a-entity id="caneca-grupo" position="0 -1.9 -3.2" visible="false">
+      <a-cone radius-bottom="0.32" radius-top="0.27" height="0.72"
+        color="#059669" roughness="0.35" metalness="0.35" shadow="cast:true"></a-cone>
+      <a-cylinder position="0 0 0" radius="0.285" height="0.07" color="#34d399" roughness="0.25" metalness="0.55"></a-cylinder>
+      <a-torus position="0 0.36 0" rotation="90 0 0" radius="0.30" radius-tubular="0.019" color="#6ee7b7" metalness="0.65" roughness="0.15"></a-torus>
+      <a-cylinder position="0 0.41 0" radius="0.28" height="0.055" color="#065f46" roughness="0.45" metalness="0.25" shadow="cast:true"></a-cylinder>
+      <a-box position="0 0.44 0.10" width="0.24" height="0.03" depth="0.10" color="#022c22"></a-box>
+      <a-cylinder position="0 -0.38 0" radius="0.34" height="0.065" color="#047857" roughness="0.55" metalness="0.15"></a-cylinder>
+      <a-torus position="0 0.06 0.33" rotation="0 0 0" radius="0.068" radius-tubular="0.011" color="#a7f3d0"></a-torus>
+      <a-box id="caneca-hit" position="0 -0.05 0" width="0.63" height="0.52" depth="0.63" visible="false" static-body="mass:0"></a-box>
+    </a-entity>
 
-  <!-- CANECA 3D compuesta -->
-  <a-entity id="caneca-grupo" position="0 -1.9 -3.2" visible="false">
-    <a-cone radius-bottom="0.32" radius-top="0.27" height="0.72"
-      color="#059669" roughness="0.35" metalness="0.35" shadow="cast:true">
-    </a-cone>
-    <a-cylinder position="0 0 0" radius="0.285" height="0.07"
-      color="#34d399" roughness="0.25" metalness="0.55">
-    </a-cylinder>
-    <a-torus position="0 0.36 0" rotation="90 0 0"
-      radius="0.30" radius-tubular="0.019"
-      color="#6ee7b7" metalness="0.65" roughness="0.15">
-    </a-torus>
-    <a-cylinder position="0 0.41 0" radius="0.28" height="0.055"
-      color="#065f46" roughness="0.45" metalness="0.25" shadow="cast:true">
-    </a-cylinder>
-    <a-box position="0 0.44 0.10" width="0.24" height="0.03" depth="0.10"
-      color="#022c22">
-    </a-box>
-    <a-cylinder position="0 -0.38 0" radius="0.34" height="0.065"
-      color="#047857" roughness="0.55" metalness="0.15">
-    </a-cylinder>
-    <a-torus position="0 0.06 0.33" rotation="0 0 0"
-      radius="0.068" radius-tubular="0.011" color="#a7f3d0">
-    </a-torus>
-    <!-- Collider -->
-    <a-box id="caneca-hit" position="0 -0.05 0"
-      width="0.63" height="0.52" depth="0.63"
-      visible="false" static-body="mass:0">
-    </a-box>
-  </a-entity>
+    <a-box id="suelo-limite" position="0 -3.5 -3.2" width="16" height="0.1" depth="5" visible="false" static-body="mass:0"></a-box>
 
-  <!-- Suelo límite -->
-  <a-box id="suelo-limite" position="0 -3.5 -3.2"
-    width="16" height="0.1" depth="5"
-    visible="false" static-body="mass:0">
-  </a-box>
-
-  <a-camera position="0 0 0"
-    look-controls="enabled:false" wasd-controls="enabled:false">
-  </a-camera>
-
-</a-scene>
-
-<!-- placeholder para que MindAR no rompa sin su UI -->
-<div id="scan-ui-placeholder" style="display:none"></div>
+    <a-camera position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-camera>
+  </a-scene>
+</div>
 
 <!-- ══ PANTALLA ESCANEO ══ -->
-<div id="screen-scan">
+<div id="screen-scan" class="screen">
   <div class="scan-frame">
     <div class="scan-corner tl"></div>
     <div class="scan-corner tr"></div>
@@ -371,7 +232,7 @@
 </div>
 
 <!-- ══ MENÚ PRINCIPAL ══ -->
-<div id="screen-menu" class="hidden">
+<div id="screen-menu" class="screen hidden">
   <div class="menu-logo">♻ GREENCOINS</div>
   <div class="menu-sub">SELECCIONA UNA OPCIÓN</div>
 
@@ -395,96 +256,37 @@
 </div>
 
 <!-- ══ PANTALLA TUTORIAL ══ -->
-<div id="screen-tutorial" class="hidden">
+<div id="screen-tutorial" class="screen hidden">
   <div class="tut-header">
     <div class="tut-back" id="btn-tut-back">←</div>
     <div class="tut-title">GUÍA DE RECICLAJE</div>
   </div>
   <div class="tut-body">
-
-    <!-- Guías de canecas -->
     <div>
-      <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">
-        ¿Qué va en cada caneca?
-      </div>
+      <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">¿Qué va en cada caneca?</div>
       <div class="canecas-grid">
-        <div class="caneca-card blanca">
-          <div class="caneca-icon">🗑</div>
-          <div class="caneca-color">Blanca</div>
-          <div class="caneca-items">Plástico<br>Vidrio<br>Metal<br>Latas</div>
-        </div>
-        <div class="caneca-card verde">
-          <div class="caneca-icon">🗑</div>
-          <div class="caneca-color">Verde</div>
-          <div class="caneca-items">Papel<br>Cartón<br>Revistas<br>Cuadernos</div>
-        </div>
-        <div class="caneca-card negra">
-          <div class="caneca-icon">🗑</div>
-          <div class="caneca-color">Negra</div>
-          <div class="caneca-items">Restos<br>comida<br>Servilletas<br>No recic.</div>
-        </div>
+        <div class="caneca-card blanca"><div class="caneca-icon">🗑</div><div class="caneca-color">Blanca</div><div class="caneca-items">Plástico<br>Vidrio<br>Metal<br>Latas</div></div>
+        <div class="caneca-card verde"><div class="caneca-icon">🗑</div><div class="caneca-color">Verde</div><div class="caneca-items">Papel<br>Cartón<br>Revistas<br>Cuadernos</div></div>
+        <div class="caneca-card negra"><div class="caneca-icon">🗑</div><div class="caneca-color">Negra</div><div class="caneca-items">Restos<br>comida<br>Servilletas<br>No recic.</div></div>
       </div>
     </div>
-
-    <!-- Demo interactiva -->
     <div class="tut-anim">
       <h4>TOCA UN RESIDUO PARA VER DÓNDE VA</h4>
       <div class="residuo-demo">
-        <div class="residuo-chip" data-caneca="Blanca 🗑" data-color="#e5e7eb">
-          <div class="dot" style="background:#3b82f6"></div>Botella plástico
-        </div>
-        <div class="residuo-chip" data-caneca="Verde 🗑" data-color="#34d399">
-          <div class="dot" style="background:#a3e635"></div>Hoja de papel
-        </div>
-        <div class="residuo-chip" data-caneca="Negra 🗑" data-color="#9ca3af">
-          <div class="dot" style="background:#6b7280"></div>Resto de comida
-        </div>
-        <div class="residuo-chip" data-caneca="Blanca 🗑" data-color="#e5e7eb">
-          <div class="dot" style="background:#94a3b8"></div>Lata de aluminio
-        </div>
-        <div class="residuo-chip" data-caneca="Verde 🗑" data-color="#34d399">
-          <div class="dot" style="background:#f59e0b"></div>Cartón de jugo
-        </div>
-        <div class="residuo-chip" data-caneca="Negra 🗑" data-color="#9ca3af">
-          <div class="dot" style="background:#ef4444"></div>Servilleta usada
-        </div>
+        <div class="residuo-chip" data-caneca="Blanca 🗑" data-color="#e5e7eb"><div class="dot" style="background:#3b82f6"></div>Botella plástico</div>
+        <div class="residuo-chip" data-caneca="Verde 🗑" data-color="#34d399"><div class="dot" style="background:#a3e635"></div>Hoja de papel</div>
+        <div class="residuo-chip" data-caneca="Negra 🗑" data-color="#9ca3af"><div class="dot" style="background:#6b7280"></div>Resto de comida</div>
+        <div class="residuo-chip" data-caneca="Blanca 🗑" data-color="#e5e7eb"><div class="dot" style="background:#94a3b8"></div>Lata de aluminio</div>
+        <div class="residuo-chip" data-caneca="Verde 🗑" data-color="#34d399"><div class="dot" style="background:#f59e0b"></div>Cartón de jugo</div>
+        <div class="residuo-chip" data-caneca="Negra 🗑" data-color="#9ca3af"><div class="dot" style="background:#ef4444"></div>Servilleta usada</div>
       </div>
       <div class="tut-resultado" id="tut-resultado">—</div>
     </div>
-
-    <!-- Eco-datos -->
-    <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">
-      Eco-Datos 🌱
-    </div>
-    <div class="eco-card">
-      <div class="eco-icon">💡</div>
-      <div class="eco-text">
-        <h4>Botella de plástico</h4>
-        <p>Reciclar una botella PET ahorra energía equivalente a encender un bombillo durante 4 horas.</p>
-      </div>
-    </div>
-    <div class="eco-card">
-      <div class="eco-icon">🌊</div>
-      <div class="eco-text">
-        <h4>Lata de aluminio</h4>
-        <p>El aluminio tarda 500 años en degradarse. Reciclado, ahorra un 95% de la energía de producción.</p>
-      </div>
-    </div>
-    <div class="eco-card">
-      <div class="eco-icon">🌳</div>
-      <div class="eco-text">
-        <h4>Papel y cartón</h4>
-        <p>Reciclar 1 tonelada de papel salva 17 árboles y ahorra 26,000 litros de agua.</p>
-      </div>
-    </div>
-    <div class="eco-card">
-      <div class="eco-icon">🏭</div>
-      <div class="eco-text">
-        <h4>Colombia recicla solo el 8%</h4>
-        <p>El promedio latinoamericano es 18%. Cada residuo bien clasificado en UMB cuenta.</p>
-      </div>
-    </div>
-
+    <div style="font-size:.7rem;color:#ffffff55;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Eco-Datos 🌱</div>
+    <div class="eco-card"><div class="eco-icon">💡</div><div class="eco-text"><h4>Botella de plástico</h4><p>Reciclar una botella PET ahorra energía equivalente a encender un bombillo durante 4 horas.</p></div></div>
+    <div class="eco-card"><div class="eco-icon">🌊</div><div class="eco-text"><h4>Lata de aluminio</h4><p>El aluminio tarda 500 años en degradarse. Reciclado, ahorra un 95% de la energía de producción.</p></div></div>
+    <div class="eco-card"><div class="eco-icon">🌳</div><div class="eco-text"><h4>Papel y cartón</h4><p>Reciclar 1 tonelada de papel salva 17 árboles y ahorra 26,000 litros de agua.</p></div></div>
+    <div class="eco-card"><div class="eco-icon">🏭</div><div class="eco-text"><h4>Colombia recicla solo el 8%</h4><p>El promedio latinoamericano es 18%. Cada residuo bien clasificado en UMB cuenta.</p></div></div>
     <div style="height:20px"></div>
   </div>
 </div>
@@ -492,15 +294,9 @@
 <!-- ══ HUD JUEGO ══ -->
 <div id="hud" class="hidden">
   <div class="score-bar">
-    <div>
-      <div class="hud-lbl">GreenCoins</div>
-      <div class="hud-score" id="score-val">0</div>
-    </div>
+    <div><div class="hud-lbl">GreenCoins</div><div class="hud-score" id="score-val">0</div></div>
     <div id="hud-timer">60</div>
-    <div>
-      <div class="hud-lbl">Combo</div>
-      <div class="hud-combo" id="combo-val">×1</div>
-    </div>
+    <div><div class="hud-lbl">Combo</div><div class="hud-combo" id="combo-val">×1</div></div>
   </div>
 </div>
 <div id="prog-wrap" class="hidden">
@@ -513,7 +309,7 @@
 <div id="tilt-hint">INCLINA EL TELÉFONO PARA MOVER LA CANECA</div>
 
 <!-- ══ FIN RONDA ══ -->
-<div id="screen-fin" class="hidden">
+<div id="screen-fin" class="screen hidden">
   <div class="fin-title" id="fin-titulo">RONDA COMPLETADA</div>
   <div class="fin-sub" id="fin-sub">¡Objetivo cumplido!</div>
   <div class="stats-row">
@@ -537,354 +333,470 @@
 <div class="flash" id="miss-flash"></div>
 <button id="gyro-btn">ACTIVAR GIROSCOPIO</button>
 
+<!-- MindAR se carga solo en fase escaneo, fuera de A-Frame -->
+<div id="mindar-container" style="position:fixed;inset:0;z-index:5;display:none"></div>
+
 <script>
 (function(){
 'use strict';
 
-// ══ CÁMARA FONDO ══════════════════════════════════════════
-navigator.mediaDevices.getUserMedia({
-  video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},
-  audio:false
-}).then(s=>{ document.getElementById('cam-bg').srcObject=s; })
-  .catch(()=>{ document.getElementById('cam-bg').style.background='#0d1f12'; });
+// ══════════════════════════════════════════
+// FASE 1: ESCANEO CON CÁMARA
+// ══════════════════════════════════════════
 
-// ══ REFS ══════════════════════════════════════════════════
-const scene       = document.querySelector('a-scene');
-const canecaGrupo = document.getElementById('caneca-grupo');
-const canecaHit   = document.getElementById('caneca-hit');
-const scoreEl     = document.getElementById('score-val');
-const comboEl     = document.getElementById('combo-val');
-const timerEl     = document.getElementById('hud-timer');
-const progFill    = document.getElementById('prog-fill');
-const progTxt     = document.getElementById('prog-txt');
-const rondaTxt    = document.getElementById('ronda-txt');
+let camStream = null;
+let desbloqueado = false;
 
-// ══ ESTADO ════════════════════════════════════════════════
-let desbloqueado=false, juegoActivo=false;
-let score=0,combo=0,maxCombo=0,atrapados=0,ronda=1;
-let spawnDelay=2200,lastSpawn=0,rafId=null,timerInt=null,timerSeg=60;
-const OBJETIVO=10, TIEMPO=60;
+// Activar cámara para el video de fondo en escaneo
+async function iniciarCamaraEscaneo() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    const vid = document.getElementById('cam-bg');
+    vid.srcObject = camStream;
+    vid.classList.add('activo');
+  } catch(e) {
+    console.warn('Sin cámara:', e);
+    document.body.style.background = '#0d1f12';
+  }
+}
 
-// ══ MINDAR: detectar escaneo una sola vez ════════════════
-scene.addEventListener('loaded', ()=>{
-  const target = document.getElementById('ar-target');
-  target.addEventListener('targetFound', ()=>{
-    if(desbloqueado) return;
-    desbloqueado=true;
-    // Detener MindAR para liberar cámara (ya no necesitamos tracking)
-    try{ scene.systems['mindar-image-system'].stop(); }catch(e){}
+// Simulación de escaneo: toca la pantalla para desbloquear
+// (En producción reemplazar por targetFound de MindAR)
+function iniciarDeteccionEscaneo() {
+  // Opción A: MindAR real - descomentar cuando tengas targets.mind
+  /*
+  iniciarMindAR();
+  */
+
+  // Opción B: Toca la pantalla para simular escaneo (desarrollo/demo)
+  const scanEl = document.getElementById('screen-scan');
+  scanEl.style.cursor = 'pointer';
+  
+  // Añadir instrucción táctil de demo
+  const demoLabel = document.createElement('div');
+  demoLabel.style.cssText = 'position:absolute;bottom:140px;left:50%;transform:translateX(-50%);font-size:.65rem;color:#34d39988;letter-spacing:2px;font-family:Orbitron,monospace;text-align:center;animation:blink 1.5s ease-in-out infinite';
+  demoLabel.textContent = 'TOCA LA PANTALLA PARA CONTINUAR';
+  scanEl.appendChild(demoLabel);
+
+  scanEl.addEventListener('click', () => {
+    if (desbloqueado) return;
+    desbloqueado = true;
     irMenu();
-  });
-});
+  }, { once: true });
 
-// ══ NAVEGACIÓN ════════════════════════════════════════════
-function show(id){ document.getElementById(id).classList.remove('hidden'); }
-function hide(id){ document.getElementById(id).classList.add('hidden'); }
+  scanEl.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (desbloqueado) return;
+    desbloqueado = true;
+    irMenu();
+  }, { once: true });
+}
 
-function irMenu(){
+// MindAR real (cuando tengas el archivo targets.mind)
+function iniciarMindAR() {
+  // Crear una mini-escena MindAR solo para detectar el target
+  const mindarDiv = document.getElementById('mindar-container');
+  mindarDiv.style.display = 'block';
+  mindarDiv.innerHTML = `
+    <a-scene
+      mindar-image="imageTargetSrc:./targets.mind; filterMinCF:0.001; filterBeta:0.01; uiScanning:#scan-placeholder"
+      embedded vr-mode-ui="enabled:false"
+      renderer="antialias:false; alpha:true"
+      background="color:transparent"
+      style="width:100%;height:100%">
+      <a-entity id="ar-target-detect" mindar-image-target="targetIndex:0"></a-entity>
+      <a-camera position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-camera>
+    </a-scene>
+    <div id="scan-placeholder" style="display:none"></div>
+  `;
+
+  setTimeout(() => {
+    const miniScene = mindarDiv.querySelector('a-scene');
+    if (!miniScene) return;
+    miniScene.addEventListener('loaded', () => {
+      const target = mindarDiv.querySelector('#ar-target-detect');
+      if (!target) return;
+      target.addEventListener('targetFound', () => {
+        if (desbloqueado) return;
+        desbloqueado = true;
+        try { miniScene.systems['mindar-image-system'].stop(); } catch(e) {}
+        mindarDiv.style.display = 'none';
+        irMenu();
+      });
+    });
+  }, 500);
+}
+
+// ══════════════════════════════════════════
+// NAVEGACIÓN (z-index 100, siempre encima)
+// ══════════════════════════════════════════
+
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+function irMenu() {
+  // Detener cámara de escaneo
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  document.getElementById('cam-bg').classList.remove('activo');
+
   hide('screen-scan');
   show('screen-menu');
 }
 
-document.getElementById('btn-tutorial').addEventListener('click', ()=>{
+// Botones del menú - con listeners robustos para touch
+function addTap(id, fn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Tanto click como touchend para máxima compatibilidad móvil
+  el.addEventListener('click', fn);
+  el.addEventListener('touchend', function(e) {
+    e.preventDefault(); // evita el ghost click de 300ms
+    fn(e);
+  });
+}
+
+addTap('btn-tutorial', () => {
   hide('screen-menu');
   show('screen-tutorial');
 });
 
-document.getElementById('btn-tut-back').addEventListener('click', ()=>{
+addTap('btn-tut-back', () => {
   hide('screen-tutorial');
   show('screen-menu');
 });
 
-document.getElementById('btn-jugar').addEventListener('click', ()=>{
+addTap('btn-jugar', () => {
   hide('screen-menu');
   iniciarConteo();
 });
 
-document.getElementById('btn-retry').addEventListener('click', ()=>{
+addTap('btn-retry', () => {
   hide('screen-fin');
   iniciarConteo();
 });
 
-document.getElementById('btn-menu-fin').addEventListener('click', ()=>{
+addTap('btn-menu-fin', () => {
   hide('screen-fin');
   show('screen-menu');
 });
 
-// ══ TUTORIAL: chips interactivos ══════════════════════════
-document.querySelectorAll('.residuo-chip').forEach(chip=>{
-  chip.addEventListener('click', ()=>{
-    const res  = document.getElementById('tut-resultado');
-    const can  = chip.dataset.caneca;
-    const col  = chip.dataset.color;
-    res.textContent = `→ Va en la caneca ${can}`;
-    res.style.color = col;
+// ══════════════════════════════════════════
+// TUTORIAL: chips interactivos
+// ══════════════════════════════════════════
+document.querySelectorAll('.residuo-chip').forEach(chip => {
+  const handler = (e) => {
+    e.preventDefault();
+    const res = document.getElementById('tut-resultado');
+    res.textContent = `→ Va en la caneca ${chip.dataset.caneca}`;
+    res.style.color = chip.dataset.color;
     res.classList.add('show');
-    setTimeout(()=>res.classList.remove('show'),2500);
-  });
+    setTimeout(() => res.classList.remove('show'), 2500);
+  };
+  chip.addEventListener('click', handler);
+  chip.addEventListener('touchend', handler);
 });
 
-// ══ GIROSCOPIO ════════════════════════════════════════════
-let gyroActivo=false, gammaSuave=0;
-const GYRO_SENSIBILIDAD = 0.04; // qué tan rápido responde
+// ══════════════════════════════════════════
+// GIROSCOPIO Y CONTROLES
+// ══════════════════════════════════════════
+let gyroActivo = false, gammaSuave = 0;
+const GYRO_SENSIBILIDAD = 0.04;
 const GYRO_LIMITE = 1.5;
+let juegoActivo = false;
 
-function iniciarGiroscopio(){
-  if(typeof DeviceOrientationEvent==='undefined') return;
+function moverCaneca(x) {
+  const canecaGrupo = document.getElementById('caneca-grupo');
+  const canecaHit = document.getElementById('caneca-hit');
+  const nx = Math.max(-GYRO_LIMITE, Math.min(GYRO_LIMITE, x));
+  canecaGrupo.object3D.position.x = nx;
+  if (canecaHit.body) {
+    canecaHit.body.position.x = nx;
+    canecaHit.body.velocity.setZero();
+  }
+}
 
-  // iOS 13+ requiere permiso explícito
-  if(typeof DeviceOrientationEvent.requestPermission==='function'){
-    document.getElementById('gyro-btn').style.display='block';
-    document.getElementById('gyro-btn').addEventListener('click', ()=>{
-      DeviceOrientationEvent.requestPermission().then(r=>{
-        if(r==='granted') activarGyro();
-        document.getElementById('gyro-btn').style.display='none';
+function iniciarGiroscopio() {
+  if (typeof DeviceOrientationEvent === 'undefined') return;
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    document.getElementById('gyro-btn').style.display = 'block';
+    document.getElementById('gyro-btn').addEventListener('click', () => {
+      DeviceOrientationEvent.requestPermission().then(r => {
+        if (r === 'granted') activarGyro();
+        document.getElementById('gyro-btn').style.display = 'none';
       });
-    },{once:true});
+    }, { once: true });
   } else {
     activarGyro();
   }
 }
 
-function activarGyro(){
-  window.addEventListener('deviceorientation', ev=>{
-    if(!juegoActivo || ev.gamma==null) return;
-    // gamma: inclinación lateral [-90,90]
-    // Suavizado exponencial para evitar temblor
+function activarGyro() {
+  window.addEventListener('deviceorientation', ev => {
+    if (!juegoActivo || ev.gamma == null) return;
     gammaSuave += (ev.gamma - gammaSuave) * 0.15;
-    const targetX = Math.max(-GYRO_LIMITE,
-                    Math.min(GYRO_LIMITE, gammaSuave * GYRO_SENSIBILIDAD));
-    canecaGrupo.object3D.position.x = targetX;
-    if(canecaHit.body){
-      canecaHit.body.position.x = targetX;
-      canecaHit.body.velocity.setZero();
-    }
-  },false);
-  gyroActivo=true;
+    moverCaneca(gammaSuave * GYRO_SENSIBILIDAD);
+  }, false);
+  gyroActivo = true;
 }
 
-// Fallback táctil si no hay giroscopio
-let dragging=false, startX=0, baseX=0;
-document.addEventListener('touchstart', e=>{
-  if(!juegoActivo) return;
-  startX=e.touches[0].clientX;
-  baseX=canecaGrupo.object3D.position.x;
-},{passive:true});
-document.addEventListener('touchmove', e=>{
-  if(!juegoActivo || gyroActivo) return;
-  const dx=((e.touches[0].clientX-startX)/window.innerWidth)*3.2;
-  const x=Math.max(-GYRO_LIMITE,Math.min(GYRO_LIMITE,baseX+dx));
-  canecaGrupo.object3D.position.x=x;
-  if(canecaHit.body){ canecaHit.body.position.x=x; canecaHit.body.velocity.setZero(); }
-},{passive:false});
-// mouse desktop
-document.addEventListener('mousedown',e=>{ dragging=true; startX=e.clientX; baseX=canecaGrupo.object3D.position.x; });
-document.addEventListener('mouseup',()=>dragging=false);
-document.addEventListener('mousemove',e=>{
-  if(!dragging||!juegoActivo) return;
-  const dx=((e.clientX-startX)/window.innerWidth)*3.2;
-  const x=Math.max(-GYRO_LIMITE,Math.min(GYRO_LIMITE,baseX+dx));
-  canecaGrupo.object3D.position.x=x;
-  if(canecaHit.body){ canecaHit.body.position.x=x; canecaHit.body.velocity.setZero(); }
+// Fallback táctil
+let startX = 0, baseX = 0;
+document.addEventListener('touchstart', e => {
+  if (!juegoActivo) return;
+  startX = e.touches[0].clientX;
+  const canecaGrupo = document.getElementById('caneca-grupo');
+  baseX = canecaGrupo.object3D.position.x;
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!juegoActivo || gyroActivo) return;
+  const dx = ((e.touches[0].clientX - startX) / window.innerWidth) * 3.2;
+  moverCaneca(baseX + dx);
+}, { passive: false });
+
+// Mouse desktop
+let dragging = false;
+document.addEventListener('mousedown', e => {
+  if (!juegoActivo) return;
+  dragging = true;
+  startX = e.clientX;
+  const canecaGrupo = document.getElementById('caneca-grupo');
+  baseX = canecaGrupo.object3D.position.x;
+});
+document.addEventListener('mouseup', () => dragging = false);
+document.addEventListener('mousemove', e => {
+  if (!dragging || !juegoActivo) return;
+  const dx = ((e.clientX - startX) / window.innerWidth) * 3.2;
+  moverCaneca(baseX + dx);
 });
 
-// ══ TIPOS DE RESIDUO ══════════════════════════════════════
-const TIPOS=[
-  {label:'📦 CARTÓN', color:'#3b82f6',emit:'#1d4ed8',geo:'primitive:box;width:0.24;height:0.32;depth:0.24',mass:0.4},
-  {label:'🧴 PLÁSTICO',color:'#e5e7eb',emit:'#9ca3af',geo:'primitive:cylinder;radius:0.11;height:0.30',mass:0.25},
-  {label:'🍎 ORGÁNICO',color:'#a3e635',emit:'#65a30d',geo:'primitive:sphere;radius:0.14',mass:0.35},
-  {label:'🍷 VIDRIO',  color:'#f87171',emit:'#b91c1c',geo:'primitive:cylinder;radius:0.09;height:0.38',mass:0.6},
-  {label:'🔩 METAL',  color:'#94a3b8',emit:'#334155',geo:'primitive:box;width:0.20;height:0.20;depth:0.20',mass:0.8},
+// ══════════════════════════════════════════
+// JUEGO
+// ══════════════════════════════════════════
+let score = 0, combo = 0, maxCombo = 0, atrapados = 0, ronda = 1;
+let spawnDelay = 2200, lastSpawn = 0, rafId = null, timerInt = null, timerSeg = 60;
+const OBJETIVO = 10, TIEMPO = 60;
+
+const TIPOS = [
+  { label:'📦 CARTÓN',    color:'#3b82f6', emit:'#1d4ed8', geo:'primitive:box;width:0.24;height:0.32;depth:0.24', mass:0.4 },
+  { label:'🧴 PLÁSTICO',  color:'#e5e7eb', emit:'#9ca3af', geo:'primitive:cylinder;radius:0.11;height:0.30',       mass:0.25 },
+  { label:'🍎 ORGÁNICO',  color:'#a3e635', emit:'#65a30d', geo:'primitive:sphere;radius:0.14',                     mass:0.35 },
+  { label:'🍷 VIDRIO',    color:'#f87171', emit:'#b91c1c', geo:'primitive:cylinder;radius:0.09;height:0.38',       mass:0.6 },
+  { label:'🔩 METAL',     color:'#94a3b8', emit:'#334155', geo:'primitive:box;width:0.20;height:0.20;depth:0.20',  mass:0.8 },
 ];
 
-// ══ SPAWN ═════════════════════════════════════════════════
-function spawnResiduo(){
-  const tipo=TIPOS[Math.floor(Math.random()*TIPOS.length)];
-  const el=document.createElement('a-entity');
-  const sx=(Math.random()*2.8)-1.4;
+function spawnResiduo() {
+  const scene = document.querySelector('a-scene');
+  if (!scene || !scene.hasLoaded) return;
+  const tipo = TIPOS[Math.floor(Math.random() * TIPOS.length)];
+  const el = document.createElement('a-entity');
+  const sx = (Math.random() * 2.8) - 1.4;
 
-  el.setAttribute('geometry',tipo.geo);
-  el.setAttribute('material',`color:${tipo.color};emissive:${tipo.emit};emissiveIntensity:0.18;roughness:0.5;metalness:0.3`);
-  el.setAttribute('position',`${sx} 3.8 -3.2`);
-  el.setAttribute('rotation',`${Math.random()*360} ${Math.random()*360} 0`);
-  el.setAttribute('shadow','cast:true');
-  el.setAttribute('dynamic-body',`mass:${tipo.mass};linearDamping:0.04;angularDamping:0.08`);
+  el.setAttribute('geometry', tipo.geo);
+  el.setAttribute('material', `color:${tipo.color};emissive:${tipo.emit};emissiveIntensity:0.18;roughness:0.5;metalness:0.3`);
+  el.setAttribute('position', `${sx} 3.8 -3.2`);
+  el.setAttribute('rotation', `${Math.random()*360} ${Math.random()*360} 0`);
+  el.setAttribute('shadow', 'cast:true');
+  el.setAttribute('dynamic-body', `mass:${tipo.mass};linearDamping:0.04;angularDamping:0.08`);
   scene.appendChild(el);
 
-  el.addEventListener('body-loaded',()=>{
-    if(el.body) el.body.angularVelocity.set(
-      (Math.random()-.5)*5,(Math.random()-.5)*5,(Math.random()-.5)*3);
+  el.addEventListener('body-loaded', () => {
+    if (el.body) el.body.angularVelocity.set(
+      (Math.random()-.5)*5, (Math.random()-.5)*5, (Math.random()-.5)*3);
   });
 
-  // Etiqueta
-  const tag=document.createElement('div');
-  tag.className='obj-tag'; tag.textContent=tipo.label;
+  const tag = document.createElement('div');
+  tag.className = 'obj-tag';
+  tag.textContent = tipo.label;
   document.body.appendChild(tag);
-  const tagTick=setInterval(()=>{
-    if(!el.parentNode){clearInterval(tagTick);tag.remove();return;}
-    const p=el.object3D.getWorldPosition(new THREE.Vector3());
-    tag.style.left=((p.x/3.5+0.5)*window.innerWidth)+'px';
-    tag.style.top =((-p.y/7+0.5)*window.innerHeight-22)+'px';
-  },50);
+  const tagTick = setInterval(() => {
+    if (!el.parentNode) { clearInterval(tagTick); tag.remove(); return; }
+    const p = el.object3D.getWorldPosition(new THREE.Vector3());
+    tag.style.left = ((p.x / 3.5 + 0.5) * window.innerWidth) + 'px';
+    tag.style.top = ((-p.y / 7 + 0.5) * window.innerHeight - 22) + 'px';
+  }, 50);
 
-  // Colisión
-  let handled=false;
-  el.addEventListener('collide',ev=>{
-    if(handled) return;
-    const other=ev.detail.body?.el;
-    if(other&&other.id==='caneca-hit'){
-      handled=true;
+  let handled = false;
+  el.addEventListener('collide', ev => {
+    if (handled) return;
+    const other = ev.detail.body?.el;
+    const canecaHit = document.getElementById('caneca-hit');
+    const scoreEl = document.getElementById('score-val');
+    const comboEl = document.getElementById('combo-val');
+    if (other && other.id === 'caneca-hit') {
+      handled = true;
       playAudio('#soundAcierto'); flash('hit'); bounceCaneca();
-      combo++; if(combo>maxCombo)maxCombo=combo;
-      atrapados++; score+=10*combo;
-      scoreEl.textContent=score; comboEl.textContent=`×${combo}`;
+      combo++; if (combo > maxCombo) maxCombo = combo;
+      atrapados++; score += 10 * combo;
+      scoreEl.textContent = score; comboEl.textContent = `×${combo}`;
       actualizarProg(); popParticles(tipo.color);
-      destroy(el,tag,tagTick);
-      if(atrapados>=OBJETIVO) finRonda(true);
-    } else if(other&&other.id==='suelo-limite'){
-      handled=true;
+      destroy(el, tag, tagTick);
+      if (atrapados >= OBJETIVO) finRonda(true);
+    } else if (other && other.id === 'suelo-limite') {
+      handled = true;
       playAudio('#soundNya'); flash('miss');
-      combo=0; comboEl.textContent='×1';
-      destroy(el,tag,tagTick);
+      combo = 0; comboEl.textContent = '×1';
+      destroy(el, tag, tagTick);
     }
   });
-  setTimeout(()=>{if(!handled&&el.parentNode){handled=true;destroy(el,tag,tagTick);}},9000);
+  setTimeout(() => { if (!handled && el.parentNode) { handled = true; destroy(el, tag, tagTick); } }, 9000);
 }
 
-function destroy(el,tag,tagTick){
+function destroy(el, tag, tagTick) {
   clearInterval(tagTick); tag.remove();
-  if(el.parentNode) el.parentNode.removeChild(el);
+  if (el.parentNode) el.parentNode.removeChild(el);
 }
 
-// ══ GAME LOOP ═════════════════════════════════════════════
-function gameTick(ts){
-  if(!juegoActivo){rafId=null;return;}
-  if(ts-lastSpawn>spawnDelay){ spawnResiduo(); lastSpawn=ts; }
-  rafId=requestAnimationFrame(gameTick);
+function gameTick(ts) {
+  if (!juegoActivo) { rafId = null; return; }
+  if (ts - lastSpawn > spawnDelay) { spawnResiduo(); lastSpawn = ts; }
+  rafId = requestAnimationFrame(gameTick);
 }
 
-// ══ TIMER ═════════════════════════════════════════════════
-function iniciarTimer(){
-  timerSeg=TIEMPO;
-  timerEl.textContent=timerSeg;
+function iniciarTimer() {
+  const timerEl = document.getElementById('hud-timer');
+  timerSeg = TIEMPO;
+  timerEl.textContent = timerSeg;
   timerEl.classList.remove('urgente');
-  timerInt=setInterval(()=>{
+  timerInt = setInterval(() => {
     timerSeg--;
-    timerEl.textContent=timerSeg;
-    if(timerSeg<=10) timerEl.classList.add('urgente');
-    spawnDelay=Math.max(700,2200-((TIEMPO-timerSeg)*50));
-    if(timerSeg<=0){clearInterval(timerInt);finRonda(false);}
-  },1000);
+    timerEl.textContent = timerSeg;
+    if (timerSeg <= 10) timerEl.classList.add('urgente');
+    spawnDelay = Math.max(700, 2200 - ((TIEMPO - timerSeg) * 50));
+    if (timerSeg <= 0) { clearInterval(timerInt); finRonda(false); }
+  }, 1000);
 }
 
-function actualizarProg(){
-  const pct=Math.min(100,(atrapados/OBJETIVO)*100);
-  progFill.style.width=pct+'%';
-  progTxt.textContent=`${atrapados} / ${OBJETIVO} atrapados`;
+function actualizarProg() {
+  const pct = Math.min(100, (atrapados / OBJETIVO) * 100);
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-txt').textContent = `${atrapados} / ${OBJETIVO} atrapados`;
 }
 
-// ══ FLUJO ═════════════════════════════════════════════════
-function iniciarConteo(){
-  const cd=document.getElementById('countdown');
-  const num=document.getElementById('cd-num');
-  show('countdown'); // usa show() que quita 'hidden'
-  let n=3;
-  const tick=()=>{
-    num.textContent=n>0?n:'¡YA!';
-    num.style.animation='none';
-    void num.offsetWidth; // reflow para reiniciar
-    num.style.cssText='animation:none;opacity:1;transform:scale(1.4)';
+function iniciarConteo() {
+  const cd = document.getElementById('countdown');
+  const num = document.getElementById('cd-num');
+
+  // Activar escena 3D
+  document.getElementById('ar-scene-wrap').classList.add('activo');
+
+  cd.classList.remove('hidden');
+  let n = 3;
+  const tick = () => {
+    num.textContent = n > 0 ? n : '¡YA!';
     num.animate([
-      {transform:'scale(1.5)',opacity:0},
-      {transform:'scale(1)',  opacity:1, offset:.3},
-      {transform:'scale(.7)', opacity:0}
-    ],{duration:900,easing:'ease-out'});
-    if(n<0){setTimeout(()=>{hide('countdown');iniciarJuego();},500);return;}
+      { transform:'scale(1.5)', opacity:0 },
+      { transform:'scale(1)',   opacity:1, offset:.3 },
+      { transform:'scale(.7)', opacity:0 }
+    ], { duration:900, easing:'ease-out' });
+    if (n < 0) { setTimeout(() => { cd.classList.add('hidden'); iniciarJuego(); }, 500); return; }
     n--;
-    setTimeout(tick,950);
+    setTimeout(tick, 950);
   };
   tick();
 }
 
-function iniciarJuego(){
-  score=0;combo=0;maxCombo=0;atrapados=0;
-  spawnDelay=2200;lastSpawn=0;
-  scoreEl.textContent='0'; comboEl.textContent='×1';
-  timerEl.classList.remove('urgente');
-  rondaTxt.textContent=`RONDA ${ronda}`;
+function iniciarJuego() {
+  score = 0; combo = 0; maxCombo = 0; atrapados = 0;
+  spawnDelay = 2200; lastSpawn = 0;
+  document.getElementById('score-val').textContent = '0';
+  document.getElementById('combo-val').textContent = '×1';
+  document.getElementById('hud-timer').classList.remove('urgente');
+  document.getElementById('ronda-txt').textContent = `RONDA ${ronda}`;
   actualizarProg();
 
-  canecaGrupo.setAttribute('visible','true');
+  const canecaGrupo = document.getElementById('caneca-grupo');
+  canecaGrupo.setAttribute('visible', 'true');
+
   show('hud'); show('prog-wrap');
-  document.getElementById('tilt-hint').style.display='block';
+  document.getElementById('tilt-hint').style.display = 'block';
 
   iniciarGiroscopio();
-  juegoActivo=true;
+  juegoActivo = true;
   iniciarTimer();
-  rafId=requestAnimationFrame(gameTick);
+  rafId = requestAnimationFrame(gameTick);
 }
 
-function finRonda(exito){
-  juegoActivo=false;
+function finRonda(exito) {
+  juegoActivo = false;
   clearInterval(timerInt);
-  if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
 
-  document.querySelectorAll('a-entity[dynamic-body]').forEach(e=>{
-    if(e.parentNode) e.parentNode.removeChild(e);
-  });
-  document.querySelectorAll('.obj-tag').forEach(t=>t.remove());
+  const scene = document.querySelector('a-scene');
+  if (scene) {
+    scene.querySelectorAll('[dynamic-body]').forEach(e => {
+      if (e.parentNode) e.parentNode.removeChild(e);
+    });
+  }
+  document.querySelectorAll('.obj-tag').forEach(t => t.remove());
 
-  canecaGrupo.setAttribute('visible','false');
+  document.getElementById('caneca-grupo').setAttribute('visible', 'false');
   hide('hud'); hide('prog-wrap');
-  document.getElementById('tilt-hint').style.display='none';
+  document.getElementById('tilt-hint').style.display = 'none';
 
-  document.getElementById('fin-score').textContent=score;
-  document.getElementById('fin-combo').textContent=maxCombo;
-  document.getElementById('fin-atrap').textContent=atrapados;
+  document.getElementById('fin-score').textContent = score;
+  document.getElementById('fin-combo').textContent = maxCombo;
+  document.getElementById('fin-atrap').textContent = atrapados;
 
-  if(exito){
-    document.getElementById('fin-titulo').textContent='🏆 RONDA COMPLETADA';
-    document.getElementById('fin-sub').textContent=`¡Objetivo cumplido en ${TIEMPO-timerSeg}s!`;
-    document.getElementById('fin-badge').textContent='🌿 ¡Buen reciclador!';
+  if (exito) {
+    document.getElementById('fin-titulo').textContent = '🏆 RONDA COMPLETADA';
+    document.getElementById('fin-sub').textContent = `¡Objetivo cumplido en ${TIEMPO - timerSeg}s!`;
+    document.getElementById('fin-badge').textContent = '🌿 ¡Buen reciclador!';
     ronda++;
   } else {
-    document.getElementById('fin-titulo').textContent='⏱ TIEMPO AGOTADO';
-    document.getElementById('fin-sub').textContent=`Atrapaste ${atrapados} de ${OBJETIVO}`;
-    document.getElementById('fin-badge').textContent=`Faltan ${OBJETIVO-atrapados} para el objetivo`;
+    document.getElementById('fin-titulo').textContent = '⏱ TIEMPO AGOTADO';
+    document.getElementById('fin-sub').textContent = `Atrapaste ${atrapados} de ${OBJETIVO}`;
+    document.getElementById('fin-badge').textContent = `Faltan ${OBJETIVO - atrapados} para el objetivo`;
   }
   show('screen-fin');
 }
 
-// ══ AUXILIARES ════════════════════════════════════════════
-function flash(type){
-  const el=document.getElementById(type+'-flash');
-  el.style.opacity='1'; setTimeout(()=>el.style.opacity='0',110);
+// ══════════════════════════════════════════
+// AUXILIARES
+// ══════════════════════════════════════════
+function flash(type) {
+  const el = document.getElementById(type + '-flash');
+  el.style.opacity = '1';
+  setTimeout(() => el.style.opacity = '0', 110);
 }
-function playAudio(sel){
-  const el=document.querySelector(sel);
-  if(!el) return; try{el.currentTime=0;el.play();}catch(_){}
+function playAudio(sel) {
+  const el = document.querySelector(sel);
+  if (!el) return;
+  try { el.currentTime = 0; el.play(); } catch(_) {}
 }
-function bounceCaneca(){
+function bounceCaneca() {
+  const canecaGrupo = document.getElementById('caneca-grupo');
   canecaGrupo.removeAttribute('animation__b');
-  canecaGrupo.setAttribute('animation__b',{
-    property:'scale',from:'1.15 0.75 1.15',to:'1 1 1',
-    dur:220,easing:'easeOutElastic'
+  canecaGrupo.setAttribute('animation__b', {
+    property:'scale', from:'1.15 0.75 1.15', to:'1 1 1',
+    dur:220, easing:'easeOutElastic'
   });
 }
-function popParticles(color){
-  const chars=['✦','◆','★','·','✧'];
-  for(let i=0;i<7;i++){
-    const p=document.createElement('div');
-    p.style.cssText=`position:fixed;font-size:20px;color:${color};pointer-events:none;z-index:9999;left:50%;top:45%;`;
-    p.textContent=chars[i%chars.length];
+function popParticles(color) {
+  const chars = ['✦','◆','★','·','✧'];
+  for (let i = 0; i < 7; i++) {
+    const p = document.createElement('div');
+    p.style.cssText = `position:fixed;font-size:20px;color:${color};pointer-events:none;z-index:9999;left:50%;top:45%;`;
+    p.textContent = chars[i % chars.length];
     document.body.appendChild(p);
-    const a=(i/7)*Math.PI*2, d=55+Math.random()*55;
+    const a = (i / 7) * Math.PI * 2, d = 55 + Math.random() * 55;
     p.animate([
-      {transform:'translate(-50%,-50%)',opacity:1},
-      {transform:`translate(calc(-50% + ${Math.cos(a)*d}px),calc(-50% + ${Math.sin(a)*d}px))`,opacity:0}
-    ],{duration:440,easing:'ease-out'}).onfinish=()=>p.remove();
+      { transform:'translate(-50%,-50%)', opacity:1 },
+      { transform:`translate(calc(-50% + ${Math.cos(a)*d}px),calc(-50% + ${Math.sin(a)*d}px))`, opacity:0 }
+    ], { duration:440, easing:'ease-out' }).onfinish = () => p.remove();
   }
 }
+
+// ══════════════════════════════════════════
+// ARRANQUE
+// ══════════════════════════════════════════
+iniciarCamaraEscaneo();
+iniciarDeteccionEscaneo();
 
 })();
 </script>
