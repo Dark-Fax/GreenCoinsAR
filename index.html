@@ -5,8 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    <script
-        src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+    
+    <style>
+        /* CORRECCIÓN: Forzar transparencia total de las capas HTML y evitar pantalla blanca */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: transparent !important;
+        }
+        a-scene {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -20,15 +38,16 @@
             <audio id="soundNya" src="./nya.mp3"></audio>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
         <a-entity mindar-image-target="targetIndex: 0" id="target-contenedor">
-            <a-cylinder id="caneca" position="0 -0.2 -1" radius="0.15" height="0.4" color="#00FF00" static-body
+            <a-cylinder id="caneca" position="0 0 -1" radius="0.15" height="0.4" color="#00FF00" static-body
                 geometry="primitive: cylinder; radius: 0.15; height: 0.4">
             </a-cylinder>
         </a-entity>
 
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
     </a-scene>
+
     <script>
         (function () {
             // ── Config ──────────────────────────────────────────────
@@ -100,7 +119,6 @@
                 const caneca = document.querySelector('#caneca');
                 if (!scene || !caneca) return;
 
-                // Hide hint after first throw
                 document.getElementById('hint').style.opacity = '0';
 
                 const sphere = document.createElement('a-sphere');
@@ -117,12 +135,10 @@
                     const body = sphere.body;
                     if (!body) return;
 
-                    // Compute direction toward caneca
                     const cp = caneca.object3D.getWorldPosition(new THREE.Vector3());
                     const sp = sphere.object3D.getWorldPosition(new THREE.Vector3());
                     const dir = cp.clone().sub(sp).normalize();
 
-                    // Scale impulse by flick speed
                     const speed = Math.min(IMPULSE_STRENGTH * (dy / 120), IMPULSE_STRENGTH * 1.6);
                     const lateral = (dx / window.innerWidth) * 2;
 
@@ -191,7 +207,7 @@
                 const x = MOVE_RANGE * (0.6 * Math.sin(t * 0.8) + 0.4 * Math.sin(t * 2.1 + 1.3));
                 const pos = caneca.getAttribute('position');
                 caneca.setAttribute('position', `${x.toFixed(3)} ${pos.y} ${pos.z}`);
-                // Sync physics body
+                
                 if (caneca.body) {
                     caneca.body.position.x = x;
                     caneca.body.velocity.set(0, 0, 0);
